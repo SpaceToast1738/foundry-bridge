@@ -67,15 +67,20 @@ async function joinWorld(page, cred) {
     return;
   }
 
-  // Username field: <select name="userid"> in v13+. Try by name first, then
-  // by label fallback if the form is rendered differently.
+  // The v14 join page is an SPA shell — the form is rendered after the
+  // initial HTML response, so we explicitly wait for the userid select
+  // before reading it. If the world is on the Setup screen instead we'll
+  // hit the timeout and surface a clear error.
   const userSelect = page.locator('select[name="userid"]');
-  if (await userSelect.count()) {
-    await userSelect.selectOption(cred.userid);
-  } else {
-    log("warn", `select[name="userid"] not found on /join; the launcher needs a selector update`);
-    throw new Error("Foundry /join form did not expose a userid select");
+  try {
+    await userSelect.waitFor({ state: "attached", timeout: 15_000 });
+  } catch {
+    log("warn", `select[name="userid"] never rendered on /join (15s)`);
+    throw new Error(
+      "Foundry /join form did not expose a userid select (world may not be running, or selector changed)",
+    );
   }
+  await userSelect.selectOption(cred.userid);
 
   const passwordField = page.locator('input[name="password"]');
   if (await passwordField.count()) {
