@@ -17,7 +17,7 @@ EnvironmentFile=/etc/foundry-bridge/env
 ExecStart=/usr/bin/env npx -y supergateway \
   --stdio "node packages/mcp-server/build/server.js" \
   --port ${FOUNDRY_BRIDGE_GATEWAY_PORT} \
-  --host 127.0.0.1
+  --host 0.0.0.0
 
 Restart=always
 RestartSec=5
