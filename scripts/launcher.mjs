@@ -131,7 +131,6 @@ async function main() {
       `--unsafely-treat-insecure-origin-as-secure=${relayOrigin}`,
       "--disable-features=BlockInsecurePrivateNetworkRequests",
       "--disable-web-security",
-      `--user-data-dir=${USER_DATA_DIR}`,
     ],
   });
   const page = browser.pages()[0] ?? (await browser.newPage());
