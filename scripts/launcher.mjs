@@ -125,9 +125,13 @@ async function main() {
       "--no-sandbox",
       "--disable-dev-shm-usage",
       // Foundry's page is HTTPS; the loopback relay is plain ws://. Without
-      // this Chromium blocks the WebSocket handshake as mixed content.
+      // these the handshake is blocked by either mixed-content or Foundry's
+      // own connect-src CSP. The Chromium instance here is headless and
+      // bot-only, so the wider "disable-web-security" is acceptable.
       `--unsafely-treat-insecure-origin-as-secure=${relayOrigin}`,
       "--disable-features=BlockInsecurePrivateNetworkRequests",
+      "--disable-web-security",
+      `--user-data-dir=${USER_DATA_DIR}`,
     ],
   });
   const page = browser.pages()[0] ?? (await browser.newPage());
@@ -136,6 +140,8 @@ async function main() {
     const text = msg.text();
     if (text.startsWith("[foundry-bridge]")) {
       log("module", text);
+    } else if (msg.type() === "error") {
+      log("page-error", text.slice(0, 300));
     }
   });
   page.on("pageerror", (err) => {
