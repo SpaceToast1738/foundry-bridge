@@ -18,6 +18,69 @@ export function isReadableCollection(name: string): name is ReadableCollection {
   return (READABLE_COLLECTIONS as readonly string[]).includes(name);
 }
 
+export const WRITABLE_DOCUMENT_TYPES = [
+  "Actor",
+  "Item",
+  "JournalEntry",
+  "Folder",
+  "Scene",
+  "User",
+] as const;
+
+export type WritableDocumentType = (typeof WRITABLE_DOCUMENT_TYPES)[number];
+
+export function isWritableDocumentType(
+  name: string,
+): name is WritableDocumentType {
+  return (WRITABLE_DOCUMENT_TYPES as readonly string[]).includes(name);
+}
+
+const DOC_TYPE_TO_COLLECTION: Record<WritableDocumentType, ReadableCollection> = {
+  Actor: "actors",
+  Item: "items",
+  JournalEntry: "journal",
+  Folder: "folders",
+  Scene: "scenes",
+  User: "users",
+};
+
+export function collectionForType(
+  type: WritableDocumentType,
+): ReadableCollection {
+  return DOC_TYPE_TO_COLLECTION[type];
+}
+
+export interface FoundryDocumentClass {
+  createDocuments(
+    data: Record<string, unknown>[],
+    context?: Record<string, unknown>,
+  ): Promise<unknown[]>;
+  updateDocuments(
+    updates: Record<string, unknown>[],
+    context?: Record<string, unknown>,
+  ): Promise<unknown[]>;
+  deleteDocuments(
+    ids: string[],
+    context?: Record<string, unknown>,
+  ): Promise<unknown[]>;
+}
+
+export function getDocumentClass(
+  type: string,
+): FoundryDocumentClass | undefined {
+  if (!isWritableDocumentType(type)) return undefined;
+  const cls = (globalThis as Record<string, unknown>)[type];
+  if (
+    cls &&
+    typeof (cls as FoundryDocumentClass).createDocuments === "function" &&
+    typeof (cls as FoundryDocumentClass).updateDocuments === "function" &&
+    typeof (cls as FoundryDocumentClass).deleteDocuments === "function"
+  ) {
+    return cls as FoundryDocumentClass;
+  }
+  return undefined;
+}
+
 export function getCollection(name: string): FoundryCollection | undefined {
   switch (name) {
     case "actors":

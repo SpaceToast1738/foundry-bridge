@@ -10,11 +10,17 @@ import { assertAllowed, type PermissionState } from "./permissions.js";
 import { handlePing } from "./handlers/ping.js";
 import { handleWorldGet } from "./handlers/world.js";
 import {
+  handleDocumentsCreate,
+  handleDocumentsDelete,
   handleDocumentsGet,
   handleDocumentsList,
+  handleDocumentsUpdate,
 } from "./handlers/documents.js";
 
-export type Handler = (params: unknown) => unknown | Promise<unknown>;
+export type Handler = (
+  params: unknown,
+  state: PermissionState,
+) => unknown | Promise<unknown>;
 
 const handlers: Partial<Record<Method, Handler>> = {
   [Method.PING]: () => handlePing(),
@@ -23,6 +29,15 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleDocumentsList(params as Parameters<typeof handleDocumentsList>[0]),
   [Method.DOCUMENTS_GET]: (params) =>
     handleDocumentsGet(params as Parameters<typeof handleDocumentsGet>[0]),
+  [Method.DOCUMENTS_CREATE]: (params) =>
+    handleDocumentsCreate(params as Parameters<typeof handleDocumentsCreate>[0]),
+  [Method.DOCUMENTS_UPDATE]: (params) =>
+    handleDocumentsUpdate(params as Parameters<typeof handleDocumentsUpdate>[0]),
+  [Method.DOCUMENTS_DELETE]: (params, state) =>
+    handleDocumentsDelete(
+      params as Parameters<typeof handleDocumentsDelete>[0],
+      state,
+    ),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {
@@ -69,5 +84,5 @@ export async function dispatch(
       `No handler registered for method '${method}'`,
     );
   }
-  return await handler(params);
+  return await handler(params, state);
 }
