@@ -202,8 +202,14 @@ export function buildToolDefinitions(): ToolDef[] {
         },
         entity: docRefSchema,
         folder: {
-          oneOf: [docRefSchema, { type: "null" }],
-          description: "Target folder reference, or null to move to root.",
+          type: ["object", "null"],
+          properties: {
+            _id: { type: "string" },
+            id: { type: "string" },
+            name: { type: "string" },
+          },
+          description:
+            "Target folder reference by _id or name, or null to move to the root.",
         },
       },
       required: ["type", "entity", "folder"],
