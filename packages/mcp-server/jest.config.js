@@ -2,6 +2,7 @@ export default {
   displayName: "mcp-server",
   testEnvironment: "node",
   moduleNameMapper: {
+    "^@foundry-bridge/shared$": "<rootDir>/../shared/src/index.ts",
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   transform: {
