@@ -115,10 +115,20 @@ async function main() {
   const cred = loadActiveCredential();
   log("info", `using credential _id=${cred._id} host=${cred.hostname}`);
 
+  const relayOrigin = process.env.FOUNDRY_BRIDGE_RELAY_ORIGIN ??
+    "http://127.0.0.1:31414";
+
   const browser = await chromium.launchPersistentContext(USER_DATA_DIR, {
     headless: HEADLESS,
     viewport: { width: 1280, height: 800 },
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      // Foundry's page is HTTPS; the loopback relay is plain ws://. Without
+      // this Chromium blocks the WebSocket handshake as mixed content.
+      `--unsafely-treat-insecure-origin-as-secure=${relayOrigin}`,
+      "--disable-features=BlockInsecurePrivateNetworkRequests",
+    ],
   });
   const page = browser.pages()[0] ?? (await browser.newPage());
 
