@@ -6,7 +6,7 @@ import {
 } from "../src/handlers/documents";
 import { dispatch } from "../src/dispatch";
 import type { PermissionState } from "../src/permissions";
-import { installFakeGame, type FakeDocumentClass } from "./helpers/fake-game";
+import { installFakeGame } from "./helpers/fake-game";
 
 function gmState(overrides: Partial<PermissionState> = {}): PermissionState {
   return {
@@ -170,6 +170,3 @@ describe("dispatch integration with write tier", () => {
   });
 });
 
-// Quick sanity that the helper types stay aligned.
-const _typecheck: FakeDocumentClass | undefined = undefined;
-void _typecheck;

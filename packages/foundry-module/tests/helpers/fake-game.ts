@@ -59,15 +59,6 @@ export interface FakeGameOptions {
   skipDocumentClasses?: boolean;
 }
 
-const TYPE_TO_KEY: Record<WritableType, keyof FakeGameOptions> = {
-  Actor: "actors",
-  Item: "items",
-  JournalEntry: "journal",
-  Folder: "folders",
-  Scene: "scenes",
-  User: "users",
-};
-
 export function defaultDocumentClass(
   type: WritableType,
   store: FakeDoc[],
@@ -157,8 +148,6 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
 
   if (!opts.skipDocumentClasses) {
     for (const type of WRITABLE_TYPES) {
-      const key = TYPE_TO_KEY[type];
-      void key;
       docClassRestore[type] = (globalThis as Record<string, unknown>)[type];
       (globalThis as Record<string, unknown>)[type] = defaultDocumentClass(
         type,
