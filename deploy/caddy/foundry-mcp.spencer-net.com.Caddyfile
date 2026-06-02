@@ -1,4 +1,4 @@
-# /etc/caddy/sites-available/mcp.spencer-net.com
+# /etc/caddy/sites-available/foundry-mcp.spencer-net.com
 #
 # Drop into your Caddy config (Caddyfile import or directly under your
 # top-level Caddyfile). Caddy will obtain a TLS cert via ACME automatically.
@@ -6,7 +6,7 @@
 # Required env var (e.g. in /etc/default/caddy):
 #   MCP_BRIDGE_TOKEN=<long random string shared with the MCP client>
 
-mcp.spencer-net.com {
+foundry-mcp.spencer-net.com {
     encode zstd gzip
 
     # Block anything without the right bearer token. The matcher checks the
@@ -23,7 +23,7 @@ mcp.spencer-net.com {
     }
 
     log {
-        output file /var/log/caddy/mcp.spencer-net.com.log
+        output file /var/log/caddy/foundry-mcp.spencer-net.com.log
         format json
     }
 }

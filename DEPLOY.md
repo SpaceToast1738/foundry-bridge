@@ -18,7 +18,7 @@ external MCP client → Caddy (TLS + bearer) → supergateway → mcp-server
 - Node ≥ 20 (`node --version`)
 - Caddy ≥ 2.7
 - A dedicated Foundry user `mcp-bridge` with Assistant GM role (created in the GM UI; its document `_id` is what goes in `credentials.json`)
-- A subdomain DNS record for `mcp.spencer-net.com` pointing at the VPS
+- A subdomain DNS record for `foundry-mcp.spencer-net.com` pointing at the VPS
 - A long random bearer token: `openssl rand -hex 32`
 
 ## 1. Build the artifacts locally
@@ -125,8 +125,8 @@ In the browser journal you should see `[launcher][info] joined world` followed b
 ## 6. Caddy
 
 ```bash
-cp deploy/caddy/mcp.spencer-net.com.Caddyfile \
-  /etc/caddy/sites-available/mcp.spencer-net.com.Caddyfile
+cp deploy/caddy/foundry-mcp.spencer-net.com.Caddyfile \
+  /etc/caddy/sites-available/foundry-mcp.spencer-net.com.Caddyfile
 # Wire MCP_BRIDGE_TOKEN + FOUNDRY_BRIDGE_GATEWAY_PORT into Caddy's environment.
 # On Debian/Ubuntu this is /etc/default/caddy:
 cat >> /etc/default/caddy <<'EOF'
@@ -144,7 +144,7 @@ Caddy will fetch a TLS cert via ACME on first request.
 ```bash
 TOKEN=__paste_the_token__
 # MCP Streamable HTTP — handshake then a single tool call.
-curl -s -X POST https://mcp.spencer-net.com/ \
+curl -s -X POST https://foundry-mcp.spencer-net.com/ \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/list"}'
