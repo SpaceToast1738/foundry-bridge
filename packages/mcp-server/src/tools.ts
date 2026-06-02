@@ -1,0 +1,272 @@
+import {
+  BridgeError,
+  ErrorCode,
+  Method,
+} from "@foundry-bridge/shared";
+import {
+  getCredentialsInfo,
+  type FoundryCredential,
+} from "./core/credentials.js";
+import type { Relay } from "./relay.js";
+
+interface ToolDef {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+const READABLE_COLLECTIONS = [
+  { tool: "actors", singular: "actor", collection: "actors" },
+  { tool: "items", singular: "item", collection: "items" },
+  { tool: "journals", singular: "journal", collection: "journal" },
+  { tool: "folders", singular: "folder", collection: "folders" },
+  { tool: "scenes", singular: "scene", collection: "scenes" },
+  { tool: "users", singular: "user", collection: "users" },
+] as const;
+
+const listInputSchema = {
+  type: "object",
+  properties: {
+    where: {
+      type: "object",
+      additionalProperties: true,
+      description:
+        "Filter by field values. Conditions are AND-combined. Example: {\"folder\": \"abc\"}.",
+    },
+    requested_fields: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Field names to include in each document. _id and name are always included.",
+    },
+    max_length: {
+      type: "integer",
+      description:
+        "Maximum response size in bytes. Documents are removed from the tail until the JSON fits.",
+    },
+  },
+  required: [],
+} as const;
+
+const docRefSchema = {
+  type: "object",
+  properties: {
+    _id: { type: "string" },
+    id: { type: "string" },
+    name: { type: "string" },
+  },
+  description: "Document reference. Provide at least one of _id, id, or name.",
+  required: [],
+} as const;
+
+const getInputSchema = {
+  type: "object",
+  properties: {
+    _id: { type: "string" },
+    id: { type: "string" },
+    name: { type: "string" },
+    requested_fields: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Field names to include. _id and name are always included.",
+    },
+  },
+  required: [],
+} as const;
+
+const writableTypeProp = {
+  type: "string",
+  description:
+    "Document class name. One of: Actor, Item, JournalEntry, Folder, Scene, User.",
+} as const;
+
+const folderableTypeProp = {
+  type: "string",
+  description:
+    "Document class name the folder organises. One of: Actor, Item, JournalEntry, Scene.",
+} as const;
+
+export function buildToolDefinitions(): ToolDef[] {
+  const tools: ToolDef[] = [
+    {
+      name: "get_world",
+      description:
+        "Get a compact descriptor of the connected world: title, system, version, and per-collection counts.",
+      inputSchema: { type: "object", properties: {}, required: [] },
+    },
+    {
+      name: "ping",
+      description: "Health check. Returns { pong: true, timestamp }.",
+      inputSchema: { type: "object", properties: {}, required: [] },
+    },
+  ];
+
+  for (const c of READABLE_COLLECTIONS) {
+    tools.push({
+      name: `get_${c.tool}`,
+      description: `List all ${c.tool} in the world.`,
+      inputSchema: listInputSchema,
+    });
+    tools.push({
+      name: `get_${c.singular}`,
+      description: `Get a single ${c.singular} by _id, id, or name.`,
+      inputSchema: getInputSchema,
+    });
+  }
+
+  tools.push({
+    name: "create_document",
+    description:
+      "Create one or more documents. Inspect an existing document of the same type with get_* first to learn the system-specific schema.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: writableTypeProp,
+        data: {
+          type: "array",
+          items: { type: "object", additionalProperties: true },
+          description: "Documents to create. At minimum supply a name field.",
+        },
+      },
+      required: ["type", "data"],
+    },
+  });
+
+  tools.push({
+    name: "modify_document",
+    description:
+      "Apply one or more updates to a document. Each update is deep-merged. Inspect the document first with get_* so the field paths are correct for this game system.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: writableTypeProp,
+        _id: { type: "string", description: "The document's _id." },
+        updates: {
+          type: "array",
+          items: { type: "object", additionalProperties: true },
+          description: "Updates to apply in order.",
+        },
+      },
+      required: ["type", "_id", "updates"],
+    },
+  });
+
+  tools.push({
+    name: "delete_document",
+    description:
+      "Delete one or more documents by _id. Subject to the bridge's destructive-tier toggle and bulk limit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: writableTypeProp,
+        ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "The _ids to delete.",
+        },
+      },
+      required: ["type", "ids"],
+    },
+  });
+
+  tools.push({
+    name: "create_folder",
+    description:
+      "Create a folder for documents of the given type. Optional parent makes it a nested folder.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: folderableTypeProp,
+        name: { type: "string", description: "Folder name." },
+        parent: {
+          type: "string",
+          description: "Optional parent folder _id for nesting.",
+        },
+      },
+      required: ["type", "name"],
+    },
+  });
+
+  tools.push({
+    name: "move_to_folder",
+    description:
+      "Move an entity into a folder, or to the root (folder: null). The entity is looked up by _id or name.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: {
+          type: "string",
+          description:
+            "Entity type. One of: Actor, Item, JournalEntry, Scene, Folder.",
+        },
+        entity: docRefSchema,
+        folder: {
+          oneOf: [docRefSchema, { type: "null" }],
+          description: "Target folder reference, or null to move to root.",
+        },
+      },
+      required: ["type", "entity", "folder"],
+    },
+  });
+
+  tools.push({
+    name: "show_credentials",
+    description:
+      "List the Foundry credentials this bridge is configured with. Passwords are never returned.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  });
+
+  return tools;
+}
+
+export interface ToolContext {
+  relay: Relay;
+  credentials: FoundryCredential[];
+  activeIndex: number;
+}
+
+export async function dispatchTool(
+  name: string,
+  args: Record<string, unknown> | undefined,
+  ctx: ToolContext,
+): Promise<unknown> {
+  const params = args ?? {};
+  switch (name) {
+    case "get_world":
+      return ctx.relay.call(Method.WORLD_GET, {});
+    case "ping":
+      return ctx.relay.call(Method.PING, {});
+    case "create_document":
+      return ctx.relay.call(Method.DOCUMENTS_CREATE, params);
+    case "modify_document":
+      return ctx.relay.call(Method.DOCUMENTS_UPDATE, params);
+    case "delete_document":
+      return ctx.relay.call(Method.DOCUMENTS_DELETE, params);
+    case "create_folder":
+      return ctx.relay.call(Method.FOLDERS_CREATE, params);
+    case "move_to_folder":
+      return ctx.relay.call(Method.FOLDERS_MOVE, params);
+    case "show_credentials":
+      return getCredentialsInfo(ctx.credentials, ctx.activeIndex);
+  }
+
+  for (const c of READABLE_COLLECTIONS) {
+    if (name === `get_${c.tool}`) {
+      return ctx.relay.call(Method.DOCUMENTS_LIST, {
+        collection: c.collection,
+        ...params,
+      });
+    }
+    if (name === `get_${c.singular}`) {
+      const { requested_fields, ...rest } = params as Record<string, unknown>;
+      return ctx.relay.call(Method.DOCUMENTS_GET, {
+        collection: c.collection,
+        ref: rest,
+        requested_fields,
+      });
+    }
+  }
+
+  throw new BridgeError(ErrorCode.BAD_REQUEST, `Unknown tool '${name}'`);
+}
