@@ -1,0 +1,10 @@
+node_modules/
+build/
+dist/
+*.tsbuildinfo
+config/
+credentials.json
+*.log
+.env
+.env.*
+!.env.example

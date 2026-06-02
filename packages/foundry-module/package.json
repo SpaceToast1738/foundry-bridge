@@ -1,0 +1,15 @@
+{
+  "name": "@foundry-bridge/foundry-module",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "clean": "rimraf dist build *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@foundry-bridge/shared": "0.1.0",
+    "zod": "^3.23.8"
+  }
+}

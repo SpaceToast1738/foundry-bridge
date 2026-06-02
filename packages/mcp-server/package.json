@@ -1,0 +1,23 @@
+{
+  "name": "@foundry-bridge/mcp-server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./build/server.js",
+  "bin": {
+    "foundry-bridge-server": "./build/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "clean": "rimraf build *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@foundry-bridge/shared": "0.1.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "ws": "^8.18.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
+  }
+}
