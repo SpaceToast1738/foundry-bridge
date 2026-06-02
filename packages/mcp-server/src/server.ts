@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import express, { type Request, type Response } from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -87,31 +89,7 @@ function formatToolError(err: unknown): {
   };
 }
 
-async function main(): Promise<void> {
-  const config = resolveRuntimeConfig(process.env, process.cwd());
-  const credentials = loadCredentials(config.credentialsPath);
-  const activeIndex = resolveActiveIndex(credentials, config.activeCredentialId);
-
-  const logger = {
-    log: (msg: string) => console.error(msg),
-    warn: (msg: string) => console.error(msg),
-    error: (msg: string) => console.error(msg),
-  };
-
-  const relay = new Relay({
-    port: config.relayPort,
-    host: config.relayHost,
-    logger,
-  });
-  await relay.start();
-
-  const context: ToolContext = {
-    relay,
-    credentials,
-    activeIndex,
-  };
-
-  const instructions = loadInstructions();
+function createServer(context: ToolContext, instructions: string): Server {
   const server = new Server(
     { name: "foundry-bridge", version: "0.1.0" },
     {
@@ -138,12 +116,110 @@ async function main(): Promise<void> {
     }
   });
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("[foundry-bridge] MCP server running on stdio");
+  return server;
+}
+
+interface Session {
+  server: Server;
+  transport: StreamableHTTPServerTransport;
+}
+
+async function main(): Promise<void> {
+  const config = resolveRuntimeConfig(process.env, process.cwd());
+  const credentials = loadCredentials(config.credentialsPath);
+  const activeIndex = resolveActiveIndex(credentials, config.activeCredentialId);
+
+  const logger = {
+    log: (msg: string) => console.error(msg),
+    warn: (msg: string) => console.error(msg),
+    error: (msg: string) => console.error(msg),
+  };
+
+  const relay = new Relay({
+    port: config.relayPort,
+    host: config.relayHost,
+    logger,
+  });
+  await relay.start();
+
+  const context: ToolContext = {
+    relay,
+    credentials,
+    activeIndex,
+  };
+
+  const instructions = loadInstructions();
+  const sessions = new Map<string, Session>();
+
+  async function createSession(): Promise<Session> {
+    const server = createServer(context, instructions);
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (id) => {
+        sessions.set(id, { server, transport });
+        console.error(`[foundry-bridge] session ${id} initialized`);
+      },
+      onsessionclosed: (id) => {
+        sessions.delete(id);
+        console.error(`[foundry-bridge] session ${id} closed`);
+      },
+    });
+    transport.onclose = () => {
+      if (transport.sessionId) sessions.delete(transport.sessionId);
+    };
+    await server.connect(transport);
+    return { server, transport };
+  }
+
+  const app = express();
+  app.use(express.json({ limit: "16mb" }));
+
+  const handleMcp = async (req: Request, res: Response) => {
+    const sessionId = req.header("mcp-session-id");
+    let session: Session | undefined;
+    if (sessionId) session = sessions.get(sessionId);
+    if (!session) session = await createSession();
+    try {
+      await session.transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      console.error(`[foundry-bridge] transport error: ${(err as Error).message}`);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Internal server error" },
+          id: null,
+        });
+      }
+    }
+  };
+
+  app.all("/mcp", handleMcp);
+  // Back-compat: some clients still hit /sse. Treat it the same.
+  app.all("/sse", handleMcp);
+
+  // Simple health for load-balancer probes; no auth needed.
+  app.get("/healthz", (_req, res) => res.json({ ok: true }));
+
+  const gatewayPort = Number(process.env.FOUNDRY_BRIDGE_GATEWAY_PORT ?? 31415);
+  const gatewayHost = process.env.FOUNDRY_BRIDGE_GATEWAY_HOST ?? "0.0.0.0";
+
+  const httpServer = app.listen(gatewayPort, gatewayHost, () => {
+    console.error(
+      `[foundry-bridge] MCP server listening on http://${gatewayHost}:${gatewayPort}/mcp`,
+    );
+  });
 
   const shutdown = async (signal: string) => {
     console.error(`[foundry-bridge] received ${signal}, shutting down`);
+    httpServer.close();
+    for (const session of sessions.values()) {
+      try {
+        await session.transport.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    sessions.clear();
     try {
       await relay.stop();
     } catch (err) {

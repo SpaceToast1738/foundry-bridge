@@ -1,5 +1,5 @@
 [Unit]
-Description=foundry-bridge MCP gateway (supergateway + stdio MCP server)
+Description=foundry-bridge MCP gateway (Streamable HTTP)
 Documentation=https://github.com/SpaceToast1738/foundry-bridge
 After=network-online.target
 Wants=network-online.target
@@ -11,13 +11,10 @@ Group=foundry-bridge
 WorkingDirectory=/opt/foundry-bridge
 EnvironmentFile=/etc/foundry-bridge/env
 
-# supergateway translates the MCP server's stdio into Streamable HTTP/SSE.
-# It runs the MCP server as a child process; the relay (default 31414) is
-# opened by that child for the headless browser to connect to.
-ExecStart=/usr/bin/env npx -y supergateway \
-  --stdio "node packages/mcp-server/build/server.js" \
-  --port ${FOUNDRY_BRIDGE_GATEWAY_PORT} \
-  --host 0.0.0.0
+# Runs the MCP server directly. The server exposes Streamable HTTP on
+# FOUNDRY_BRIDGE_GATEWAY_PORT (default 31415) and opens the loopback relay
+# on FOUNDRY_BRIDGE_PORT (default 31414) for the headless browser.
+ExecStart=/usr/bin/node packages/mcp-server/build/server.js
 
 Restart=always
 RestartSec=5
