@@ -1,0 +1,38 @@
+[Unit]
+Description=foundry-bridge MCP gateway (supergateway + stdio MCP server)
+Documentation=https://github.com/SpaceToast1738/foundry-bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=foundry-bridge
+Group=foundry-bridge
+WorkingDirectory=/opt/foundry-bridge
+EnvironmentFile=/etc/foundry-bridge/env
+
+# supergateway translates the MCP server's stdio into Streamable HTTP/SSE.
+# It runs the MCP server as a child process; the relay (default 31414) is
+# opened by that child for the headless browser to connect to.
+ExecStart=/usr/bin/env npx -y supergateway \
+  --stdio "node packages/mcp-server/build/server.js" \
+  --port ${FOUNDRY_BRIDGE_GATEWAY_PORT} \
+  --host 127.0.0.1
+
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/log/foundry-bridge
+ReadOnlyPaths=/etc/foundry-bridge
+AmbientCapabilities=
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

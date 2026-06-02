@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "build": "tsc --build",
+    "bundle": "npm run build:bundle --workspaces --if-present",
+    "dist": "npm run build && npm run bundle",
     "test": "jest --passWithNoTests",
     "lint": "eslint .",
     "clean": "tsc --build --clean && rimraf \"packages/*/build\" \"packages/*/dist\""

@@ -1,0 +1,32 @@
+[Unit]
+Description=foundry-bridge headless Chromium (Foundry module host)
+Documentation=https://github.com/SpaceToast1738/foundry-bridge
+After=network-online.target foundry-bridge-gateway.service
+Requires=foundry-bridge-gateway.service
+
+[Service]
+Type=simple
+User=foundry-bridge
+Group=foundry-bridge
+WorkingDirectory=/opt/foundry-bridge
+EnvironmentFile=/etc/foundry-bridge/env
+
+ExecStart=/usr/bin/node scripts/launcher.mjs
+
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/foundry-bridge /var/log/foundry-bridge
+ReadOnlyPaths=/etc/foundry-bridge
+AmbientCapabilities=
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
