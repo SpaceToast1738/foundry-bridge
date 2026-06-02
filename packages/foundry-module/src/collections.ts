@@ -27,6 +27,22 @@ export const WRITABLE_DOCUMENT_TYPES = [
   "User",
 ] as const;
 
+/** Document types that Foundry organises into folders. */
+export const FOLDER_DOCUMENT_TYPES = [
+  "Actor",
+  "Item",
+  "JournalEntry",
+  "Scene",
+] as const;
+
+export type FolderDocumentType = (typeof FOLDER_DOCUMENT_TYPES)[number];
+
+export function isFolderDocumentType(
+  name: string,
+): name is FolderDocumentType {
+  return (FOLDER_DOCUMENT_TYPES as readonly string[]).includes(name);
+}
+
 export type WritableDocumentType = (typeof WRITABLE_DOCUMENT_TYPES)[number];
 
 export function isWritableDocumentType(
@@ -98,6 +114,30 @@ export function getCollection(name: string): FoundryCollection | undefined {
     default:
       return undefined;
   }
+}
+
+export interface DocRef {
+  _id?: string;
+  id?: string;
+  name?: string;
+}
+
+export function findInCollection(
+  collection: FoundryCollection,
+  ref: DocRef,
+): unknown {
+  const idRef = ref._id ?? ref.id;
+  if (idRef) {
+    const byId = collection.get(idRef);
+    if (byId !== undefined) return byId;
+  }
+  if (ref.name) {
+    return collection.contents.find((d) => {
+      const obj = d as Record<string, unknown> | null;
+      return obj && typeof obj === "object" && obj.name === ref.name;
+    });
+  }
+  return undefined;
 }
 
 interface MaybeSerializable {

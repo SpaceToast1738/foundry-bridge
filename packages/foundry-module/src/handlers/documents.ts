@@ -10,6 +10,7 @@ import {
 import {
   collectionForType,
   docToObject,
+  findInCollection,
   getCollection,
   getDocumentClass,
   isReadableCollection,
@@ -61,25 +62,13 @@ export function handleDocumentsGet(
     );
   }
 
-  const idRef = params.ref._id ?? params.ref.id;
-  let raw: unknown;
-  if (idRef) {
-    raw = collection.get(idRef);
-  }
-  if (!raw && params.ref.name) {
-    raw = collection.contents.find((d) => {
-      const obj = d as Record<string, unknown> | null;
-      return obj && typeof obj === "object" && obj.name === params.ref.name;
-    });
-  }
-
+  const raw = findInCollection(collection, params.ref);
   if (!raw) {
     throw new BridgeError(
       ErrorCode.NOT_FOUND,
       `No ${params.collection} matched ref ${JSON.stringify(params.ref)}`,
     );
   }
-
   const doc = docToObject(raw);
   return filterDocumentFields(doc, params.requested_fields);
 }

@@ -16,6 +16,10 @@ import {
   handleDocumentsList,
   handleDocumentsUpdate,
 } from "./handlers/documents.js";
+import {
+  handleFoldersCreate,
+  handleFoldersMove,
+} from "./handlers/folders.js";
 
 export type Handler = (
   params: unknown,
@@ -38,6 +42,10 @@ const handlers: Partial<Record<Method, Handler>> = {
       params as Parameters<typeof handleDocumentsDelete>[0],
       state,
     ),
+  [Method.FOLDERS_CREATE]: (params) =>
+    handleFoldersCreate(params as Parameters<typeof handleFoldersCreate>[0]),
+  [Method.FOLDERS_MOVE]: (params) =>
+    handleFoldersMove(params as Parameters<typeof handleFoldersMove>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {
