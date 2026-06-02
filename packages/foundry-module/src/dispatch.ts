@@ -8,11 +8,21 @@ import {
 import { ZodError } from "zod";
 import { assertAllowed, type PermissionState } from "./permissions.js";
 import { handlePing } from "./handlers/ping.js";
+import { handleWorldGet } from "./handlers/world.js";
+import {
+  handleDocumentsGet,
+  handleDocumentsList,
+} from "./handlers/documents.js";
 
 export type Handler = (params: unknown) => unknown | Promise<unknown>;
 
 const handlers: Partial<Record<Method, Handler>> = {
   [Method.PING]: () => handlePing(),
+  [Method.WORLD_GET]: () => handleWorldGet(),
+  [Method.DOCUMENTS_LIST]: (params) =>
+    handleDocumentsList(params as Parameters<typeof handleDocumentsList>[0]),
+  [Method.DOCUMENTS_GET]: (params) =>
+    handleDocumentsGet(params as Parameters<typeof handleDocumentsGet>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {
