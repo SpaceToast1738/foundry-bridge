@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import express, { type Request, type Response } from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -149,6 +150,40 @@ async function main(): Promise<void> {
   };
 
   const instructions = loadInstructions();
+
+  // stdio mode: a desktop client (e.g. Claude Desktop) spawns this process
+  // and speaks MCP over stdio. The loopback relay still runs so the in-browser
+  // module can connect. All logging goes to stderr, keeping stdout clean for
+  // JSON-RPC. Enable with FOUNDRY_BRIDGE_STDIO=1 or the --stdio flag.
+  const stdioMode =
+    process.env.FOUNDRY_BRIDGE_STDIO === "1" ||
+    process.argv.includes("--stdio");
+  if (stdioMode) {
+    const server = createServer(context, instructions);
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("[foundry-bridge] MCP server running on stdio");
+    const shutdownStdio = async (signal: string) => {
+      console.error(`[foundry-bridge] received ${signal}, shutting down`);
+      try {
+        await server.close();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await relay.stop();
+      } catch (err) {
+        console.error(
+          `[foundry-bridge] relay.stop error: ${(err as Error).message}`,
+        );
+      }
+      process.exit(0);
+    };
+    process.on("SIGINT", () => void shutdownStdio("SIGINT"));
+    process.on("SIGTERM", () => void shutdownStdio("SIGTERM"));
+    return;
+  }
+
   const sessions = new Map<string, Session>();
 
   async function createSession(): Promise<Session> {

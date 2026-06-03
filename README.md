@@ -30,3 +30,31 @@ npm run lint
 ```
 
 Credentials live in `packages/mcp-server/config/foundry_credentials.json` (gitignored).
+
+## Desktop (stdio) usage
+
+For a local desktop client (e.g. Claude Desktop) the MCP server can run in **stdio mode**
+instead of HTTP — the client spawns it and manages its lifecycle. The loopback relay still
+runs, so a connected Foundry client (a GM browser tab, or the headless launcher) feeds it.
+
+Enable with `FOUNDRY_BRIDGE_STDIO=1` (or `--stdio`). Claude Desktop config
+(`%APPDATA%\Claude\claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "foundry-bridge": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": ["C:\\path\\to\\foundry-bridge\\packages\\mcp-server\\build\\server.js"],
+      "env": {
+        "FOUNDRY_BRIDGE_STDIO": "1",
+        "FOUNDRY_BRIDGE_PORT": "31414",
+        "FOUNDRY_CREDENTIALS": "C:\\path\\to\\foundry-bridge\\packages\\mcp-server\\config\\foundry_credentials.json"
+      }
+    }
+  }
+}
+```
+
+A GM Foundry session (with the `foundry-bridge` module enabled) must be connected to the relay
+for tools to return data; otherwise calls return `UNAVAILABLE` ("No module connected").

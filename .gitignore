@@ -5,6 +5,7 @@ dist/
 config/
 credentials.json
 *.log
+.pw-profile/
 .env
 .env.*
 !.env.example
