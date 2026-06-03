@@ -70,7 +70,11 @@ On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed
 - **Scenes/tokens:** `get_active_scene` for context; `activate_scene` to switch view; `place_token`
   (actor + x/y, defaults to the active scene) to drop a token; `update_token` to move/hide it.
 - **Dice/tables:** `roll_dice` evaluates a formula; `draw_table` pulls a random result. Neither posts
-  to chat — announce the outcome with `post_chat_message` if the table should see it.
+  to chat — use `roll_to_chat` to roll *and* post a card, or announce with `post_chat_message`. Build
+  tables with `create_table` + `add_table_results` so `draw_table` has content.
+- **Audio:** `play_playlist`/`stop_playlist`/`play_sound` for music & ambiance.
+- **Read chat / duplicate:** `get_messages` reads recent chat for context; `duplicate_document` clones
+  an actor/item/journal (great for reskinning).
 - **Combat:** `start_combat` → `add_combatants` (token ids) → `roll_initiative` → `advance_combat`
   (`next`/`end`). All return the current round/turn/initiative state.
 

@@ -679,6 +679,107 @@ export function buildToolDefinitions(): ToolDef[] {
     },
   });
 
+  const tableResultsProp = {
+    type: "array",
+    items: {
+      oneOf: [
+        { type: "string" },
+        { type: "object", properties: { text: { type: "string" }, weight: { type: "integer" } }, required: ["text"] },
+      ],
+    },
+    description: "Results: strings, or { text, weight }.",
+  } as const;
+
+  tools.push({
+    name: "create_table",
+    description:
+      "Create a RollTable, optionally with a roll formula and initial results. Results are normalised (ranges assigned). Then draw_table can roll on it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Table name." },
+        folder: { type: "string", description: "Optional folder _id." },
+        formula: { type: "string", description: "Optional roll formula, e.g. \"1d20\". Defaults from result count." },
+        results: tableResultsProp,
+      },
+      required: ["name"],
+    },
+  });
+
+  tools.push({
+    name: "add_table_results",
+    description: "Add results to an existing RollTable (by _id or name) and re-normalise the ranges.",
+    inputSchema: {
+      type: "object",
+      properties: { table: docRefSchema, results: tableResultsProp },
+      required: ["table", "results"],
+    },
+  });
+
+  tools.push({
+    name: "play_playlist",
+    description: "Start playing a playlist (all its sounds, per the playlist's mode). Reference by _id or name.",
+    inputSchema: { type: "object", properties: { playlist: docRefSchema }, required: ["playlist"] },
+  });
+
+  tools.push({
+    name: "stop_playlist",
+    description: "Stop a playlist (all its sounds). Reference by _id or name.",
+    inputSchema: { type: "object", properties: { playlist: docRefSchema }, required: ["playlist"] },
+  });
+
+  tools.push({
+    name: "play_sound",
+    description: "Play a single sound within a playlist. Reference the playlist and the sound by _id or name.",
+    inputSchema: {
+      type: "object",
+      properties: { playlist: docRefSchema, sound: docRefSchema },
+      required: ["playlist", "sound"],
+    },
+  });
+
+  tools.push({
+    name: "get_messages",
+    description:
+      "Read the most recent chat-log messages (default 20): _id, speaker alias, text content, whisper targets, timestamp. Use for session context.",
+    inputSchema: {
+      type: "object",
+      properties: { limit: { type: "integer", description: "How many recent messages (default 20)." } },
+      required: [],
+    },
+  });
+
+  tools.push({
+    name: "roll_to_chat",
+    description:
+      "Roll a dice formula and post the result as a chat card (with optional flavor). whisper \"gm\" or a list of user refs keeps it private. Unlike roll_dice, this posts to chat.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        formula: { type: "string", description: "Dice formula, e.g. \"1d20+5\"." },
+        flavor: { type: "string", description: "Optional label shown on the roll card." },
+        whisper: { description: "Optional. \"gm\" or an array of {_id|name} user refs." },
+      },
+      required: ["formula"],
+    },
+  });
+
+  tools.push({
+    name: "duplicate_document",
+    description:
+      "Clone an existing document (Actor/Item/JournalEntry/Scene/etc.) — copies embedded items/pages too. Optional new name (default \"… (Copy)\") and destination folder.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: writableTypeProp,
+        ref: docRefSchema,
+        name: { type: "string", description: "Name for the copy." },
+        folder: { type: "string", description: "Optional destination folder _id." },
+      },
+      required: ["type", "ref"],
+    },
+  });
+
   // --- D&D 5e system adapter (only functional on a dnd5e world) ---
   tools.push({
     name: "dnd5e_apply_damage",
@@ -832,6 +933,22 @@ export async function dispatchTool(
       return ctx.relay.call(Method.DND5E_REST, params);
     case "dnd5e_actor_summary":
       return ctx.relay.call(Method.DND5E_ACTOR_SUMMARY, params);
+    case "create_table":
+      return ctx.relay.call(Method.TABLE_CREATE, params);
+    case "add_table_results":
+      return ctx.relay.call(Method.TABLE_ADD_RESULTS, params);
+    case "play_playlist":
+      return ctx.relay.call(Method.PLAYLIST_PLAY, params);
+    case "stop_playlist":
+      return ctx.relay.call(Method.PLAYLIST_STOP, params);
+    case "play_sound":
+      return ctx.relay.call(Method.PLAYLIST_PLAY_SOUND, params);
+    case "get_messages":
+      return ctx.relay.call(Method.MESSAGES_LIST, params);
+    case "roll_to_chat":
+      return ctx.relay.call(Method.DICE_ROLL_TO_CHAT, params);
+    case "duplicate_document":
+      return ctx.relay.call(Method.DOCUMENTS_DUPLICATE, params);
     case "post_chat_message":
       return ctx.relay.call(Method.MESSAGES_CREATE, params);
     case "get_active_scene":

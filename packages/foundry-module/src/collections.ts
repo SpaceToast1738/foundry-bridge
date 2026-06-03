@@ -138,6 +138,8 @@ export function getCollection(name: string): FoundryCollection | undefined {
       return game.cards as FoundryCollection | undefined;
     case "combats":
       return game.combats as FoundryCollection | undefined;
+    case "messages":
+      return game.messages as FoundryCollection | undefined;
     default:
       return undefined;
   }

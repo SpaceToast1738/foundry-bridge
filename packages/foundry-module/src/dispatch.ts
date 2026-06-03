@@ -12,11 +12,18 @@ import { handleWorldGet } from "./handlers/world.js";
 import {
   handleDocumentsCreate,
   handleDocumentsDelete,
+  handleDocumentsDuplicate,
   handleDocumentsGet,
   handleDocumentsList,
   handleDocumentsUpdate,
 } from "./handlers/documents.js";
 import { handleDocumentsSearch } from "./handlers/search.js";
+import { handleTableCreate, handleTableAddResults } from "./handlers/tables.js";
+import {
+  handlePlaylistPlay,
+  handlePlaylistPlaySound,
+  handlePlaylistStop,
+} from "./handlers/audio.js";
 import {
   handleEmbeddedCreate,
   handleEmbeddedDelete,
@@ -31,14 +38,18 @@ import {
   handleFoldersCreate,
   handleFoldersMove,
 } from "./handlers/folders.js";
-import { handleMessagesCreate } from "./handlers/messages.js";
+import { handleMessagesCreate, handleMessagesList } from "./handlers/messages.js";
 import {
   handleSceneActivate,
   handleSceneActive,
   handleTokenPlace,
   handleTokenUpdate,
 } from "./handlers/scenes.js";
-import { handleDiceRoll, handleTableDraw } from "./handlers/dice.js";
+import {
+  handleDiceRoll,
+  handleDiceRollToChat,
+  handleTableDraw,
+} from "./handlers/dice.js";
 import {
   handleCombatAdd,
   handleCombatAdvance,
@@ -164,6 +175,22 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleDnd5eRest(params as Parameters<typeof handleDnd5eRest>[0]),
   [Method.DND5E_ACTOR_SUMMARY]: (params) =>
     handleDnd5eActorSummary(params as Parameters<typeof handleDnd5eActorSummary>[0]),
+  [Method.TABLE_CREATE]: (params) =>
+    handleTableCreate(params as Parameters<typeof handleTableCreate>[0]),
+  [Method.TABLE_ADD_RESULTS]: (params) =>
+    handleTableAddResults(params as Parameters<typeof handleTableAddResults>[0]),
+  [Method.PLAYLIST_PLAY]: (params) =>
+    handlePlaylistPlay(params as Parameters<typeof handlePlaylistPlay>[0]),
+  [Method.PLAYLIST_STOP]: (params) =>
+    handlePlaylistStop(params as Parameters<typeof handlePlaylistStop>[0]),
+  [Method.PLAYLIST_PLAY_SOUND]: (params) =>
+    handlePlaylistPlaySound(params as Parameters<typeof handlePlaylistPlaySound>[0]),
+  [Method.MESSAGES_LIST]: (params) =>
+    handleMessagesList(params as Parameters<typeof handleMessagesList>[0]),
+  [Method.DICE_ROLL_TO_CHAT]: (params) =>
+    handleDiceRollToChat(params as Parameters<typeof handleDiceRollToChat>[0]),
+  [Method.DOCUMENTS_DUPLICATE]: (params) =>
+    handleDocumentsDuplicate(params as Parameters<typeof handleDocumentsDuplicate>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

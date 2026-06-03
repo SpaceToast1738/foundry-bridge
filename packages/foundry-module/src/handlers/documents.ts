@@ -120,6 +120,37 @@ export async function handleDocumentsUpdate(
   return docToObject(finalDoc);
 }
 
+interface CloneableDoc {
+  name?: string;
+  clone(data: Record<string, unknown>, context: Record<string, unknown>): Promise<unknown>;
+}
+
+export async function handleDocumentsDuplicate(
+  params: ParamsFor<typeof Method.DOCUMENTS_DUPLICATE>,
+): Promise<Record<string, unknown>> {
+  if (!isWritableDocumentType(params.type)) {
+    throw new BridgeError(ErrorCode.BAD_REQUEST, `Unknown document type '${params.type}'`);
+  }
+  const collection = getCollection(collectionForType(params.type));
+  const raw = collection && findInCollection(collection, params.ref);
+  if (!raw) {
+    throw new BridgeError(
+      ErrorCode.NOT_FOUND,
+      `${params.type} not found by ref ${JSON.stringify(params.ref)}`,
+    );
+  }
+  const doc = raw as CloneableDoc;
+  if (typeof doc.clone !== "function") {
+    throw new BridgeError(ErrorCode.UNAVAILABLE, `${params.type} does not support clone()`);
+  }
+  const updates: Record<string, unknown> = {
+    name: params.name ?? `${doc.name ?? params.type} (Copy)`,
+  };
+  if (params.folder !== undefined) updates.folder = params.folder;
+  const copy = await doc.clone(updates, { save: true });
+  return docToObject(Array.isArray(copy) ? copy[0] : copy);
+}
+
 export async function handleDocumentsDelete(
   params: ParamsFor<typeof Method.DOCUMENTS_DELETE>,
   state: PermissionState,

@@ -43,6 +43,14 @@ export const Method = {
   DND5E_ROLL: "dnd5e.roll",
   DND5E_REST: "dnd5e.rest",
   DND5E_ACTOR_SUMMARY: "dnd5e.actor_summary",
+  TABLE_CREATE: "table.create",
+  TABLE_ADD_RESULTS: "table.add_results",
+  PLAYLIST_PLAY: "playlist.play",
+  PLAYLIST_STOP: "playlist.stop",
+  PLAYLIST_PLAY_SOUND: "playlist.play_sound",
+  MESSAGES_LIST: "messages.list",
+  DICE_ROLL_TO_CHAT: "dice.roll_to_chat",
+  DOCUMENTS_DUPLICATE: "documents.duplicate",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -90,6 +98,14 @@ export const methodSchema = z.enum([
   Method.DND5E_ROLL,
   Method.DND5E_REST,
   Method.DND5E_ACTOR_SUMMARY,
+  Method.TABLE_CREATE,
+  Method.TABLE_ADD_RESULTS,
+  Method.PLAYLIST_PLAY,
+  Method.PLAYLIST_STOP,
+  Method.PLAYLIST_PLAY_SOUND,
+  Method.MESSAGES_LIST,
+  Method.DICE_ROLL_TO_CHAT,
+  Method.DOCUMENTS_DUPLICATE,
 ]);
 
 export const PermissionTier = {
@@ -141,6 +157,14 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.DND5E_ROLL]: PermissionTier.WRITE,
   [Method.DND5E_REST]: PermissionTier.WRITE,
   [Method.DND5E_ACTOR_SUMMARY]: PermissionTier.READ,
+  [Method.TABLE_CREATE]: PermissionTier.WRITE,
+  [Method.TABLE_ADD_RESULTS]: PermissionTier.WRITE,
+  [Method.PLAYLIST_PLAY]: PermissionTier.WRITE,
+  [Method.PLAYLIST_STOP]: PermissionTier.WRITE,
+  [Method.PLAYLIST_PLAY_SOUND]: PermissionTier.WRITE,
+  [Method.MESSAGES_LIST]: PermissionTier.READ,
+  [Method.DICE_ROLL_TO_CHAT]: PermissionTier.WRITE,
+  [Method.DOCUMENTS_DUPLICATE]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
@@ -154,6 +178,14 @@ const docRefSchema = z
   .refine((v) => v._id || v.id || v.name, {
     message: "Document reference requires _id, id, or name",
   });
+
+const tableResultSchema = z.union([
+  z.string().min(1),
+  z.object({
+    text: z.string().min(1),
+    weight: z.number().int().positive().optional(),
+  }),
+]);
 
 export const paramSchemas = {
   [Method.PING]: z.object({}).optional(),
@@ -338,6 +370,36 @@ export const paramSchemas = {
     type: z.enum(["short", "long"]),
   }),
   [Method.DND5E_ACTOR_SUMMARY]: z.object({ actor: docRefSchema }),
+  [Method.TABLE_CREATE]: z.object({
+    name: z.string().min(1),
+    folder: z.string().min(1).optional(),
+    formula: z.string().min(1).optional(),
+    results: z.array(tableResultSchema).optional(),
+  }),
+  [Method.TABLE_ADD_RESULTS]: z.object({
+    table: docRefSchema,
+    results: z.array(tableResultSchema).min(1),
+  }),
+  [Method.PLAYLIST_PLAY]: z.object({ playlist: docRefSchema }),
+  [Method.PLAYLIST_STOP]: z.object({ playlist: docRefSchema }),
+  [Method.PLAYLIST_PLAY_SOUND]: z.object({
+    playlist: docRefSchema,
+    sound: docRefSchema,
+  }),
+  [Method.MESSAGES_LIST]: z
+    .object({ limit: z.number().int().positive().optional() })
+    .optional(),
+  [Method.DICE_ROLL_TO_CHAT]: z.object({
+    formula: z.string().min(1),
+    flavor: z.string().min(1).optional(),
+    whisper: z.union([z.literal("gm"), z.array(docRefSchema)]).optional(),
+  }),
+  [Method.DOCUMENTS_DUPLICATE]: z.object({
+    type: z.string().min(1),
+    ref: docRefSchema,
+    name: z.string().min(1).optional(),
+    folder: z.string().min(1).optional(),
+  }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 
 export type ParamsFor<M extends Method> = z.infer<(typeof paramSchemas)[M]>;

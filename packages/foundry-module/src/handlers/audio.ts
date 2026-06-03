@@ -1,0 +1,74 @@
+import {
+  BridgeError,
+  ErrorCode,
+  Method,
+  type ParamsFor,
+} from "@foundry-bridge/shared";
+import {
+  type DocRef,
+  docToObject,
+  findInCollection,
+  getCollection,
+} from "../collections.js";
+
+interface SoundDoc {
+  id?: string;
+  _id?: string;
+  name?: string;
+}
+interface PlaylistDoc {
+  id?: string;
+  name?: string;
+  sounds?: { contents?: SoundDoc[]; get?: (id: string) => SoundDoc | undefined };
+  playAll(): Promise<unknown>;
+  stopAll(): Promise<unknown>;
+  playSound(sound: SoundDoc): Promise<unknown>;
+}
+
+function resolvePlaylist(ref: DocRef): PlaylistDoc {
+  const playlists = getCollection("playlists");
+  const raw = playlists && findInCollection(playlists, ref);
+  if (!raw) {
+    throw new BridgeError(
+      ErrorCode.NOT_FOUND,
+      `Playlist not found by ref ${JSON.stringify(ref)}`,
+    );
+  }
+  return raw as PlaylistDoc;
+}
+
+export async function handlePlaylistPlay(
+  params: ParamsFor<typeof Method.PLAYLIST_PLAY>,
+): Promise<Record<string, unknown>> {
+  const pl = resolvePlaylist(params.playlist);
+  await pl.playAll();
+  return { playlist: pl.id, playing: true };
+}
+
+export async function handlePlaylistStop(
+  params: ParamsFor<typeof Method.PLAYLIST_STOP>,
+): Promise<Record<string, unknown>> {
+  const pl = resolvePlaylist(params.playlist);
+  await pl.stopAll();
+  return { playlist: pl.id, playing: false };
+}
+
+export async function handlePlaylistPlaySound(
+  params: ParamsFor<typeof Method.PLAYLIST_PLAY_SOUND>,
+): Promise<Record<string, unknown>> {
+  const pl = resolvePlaylist(params.playlist);
+  const ref = params.sound;
+  const idRef = ref._id ?? ref.id;
+  const sounds = pl.sounds?.contents ?? [];
+  const sound =
+    (idRef && pl.sounds?.get?.(idRef)) ||
+    sounds.find((s) => (idRef ? (s.id ?? s._id) === idRef : s.name === ref.name));
+  if (!sound) {
+    throw new BridgeError(
+      ErrorCode.NOT_FOUND,
+      `Sound not found in playlist by ref ${JSON.stringify(ref)}`,
+    );
+  }
+  await pl.playSound(sound);
+  return { playlist: pl.id, sound: docToObject(sound)._id ?? sound.id, playing: true };
+}

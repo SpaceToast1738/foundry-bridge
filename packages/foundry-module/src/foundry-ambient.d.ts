@@ -48,6 +48,7 @@ declare global {
     readonly cards?: { contents: unknown[]; get(id: string): unknown };
     readonly combats?: { contents: unknown[]; get(id: string): unknown };
     readonly combat?: unknown;
+    readonly messages?: { contents: unknown[]; get(id: string): unknown };
     readonly packs?: { contents: unknown[]; get(id: string): unknown };
   }
 

@@ -44,6 +44,7 @@ target's `uuid` first (via `get_*` or `search_documents`), then write the link i
 - `create_document` takes `type` (Actor / Item / JournalEntry / Folder / Scene / User) and `data: [{...}]`. Provide at minimum a `name`.
 - `modify_document` takes `type`, `_id`, and `updates: [{...}]`. Updates are applied in order and deep-merged by Foundry.
 - `delete_document` takes `type` and `ids: [...]`. **Permanent.** Subject to the destructive tier and the configured bulk limit.
+- `duplicate_document` takes `type`, `ref`, optional `name`/`folder` — clones a document (and its embedded items/pages). Handy for reskinning an NPC or item.
 
 ## Building documents & journals
 
@@ -166,6 +167,14 @@ Prefer importing system content over hand-building it. Import first, then inspec
   private. `speaker_alias` sets the displayed speaker name. Use sparingly — public messages appear live
   in players' chat; prefer a GM whisper unless asked to address the table.
 
+- `get_messages { limit? }` — read the most recent chat messages (alias, text, whisper, timestamp) for
+  session context. (The bridge can both post and read chat.)
+
+## Audio
+
+- `play_playlist { playlist }` / `stop_playlist { playlist }` — start/stop a playlist (music, ambiance).
+- `play_sound { playlist, sound }` — play one sound within a playlist. Reference by `_id` or `name`.
+
 ## Scenes & tokens
 
 - `get_active_scene` — the scene players are currently viewing (id, name, dimensions, token count).
@@ -184,7 +193,11 @@ Coordinates are scene pixels. Use `get_active_scene` for the scene's dimensions 
 - `draw_table { table, formula? }` — draw from a RollTable (by `_id`/`name`). Returns the drawn
   result(s) **without** posting to chat or marking them drawn. Use for random encounters/loot/names.
 
-Both are read-only (no side effects). To announce a roll or draw, pass the result to `post_chat_message`.
+Both are read-only (no side effects). To announce a roll or draw, pass the result to `post_chat_message`
+— or use `roll_to_chat { formula, flavor?, whisper? }` which rolls **and** posts a dice card in one step.
+
+Build tables so `draw_table` has content: `create_table { name, formula?, results? }` and
+`add_table_results { table, results }` (results are strings or `{text, weight}`; ranges are normalised).
 
 ## Combat
 

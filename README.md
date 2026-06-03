@@ -1,6 +1,6 @@
 # foundry-bridge
 
-Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — reading and search across collections, generic document CRUD, embedded documents (journal pages, actor items), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, dice & roll tables, combat encounters, asset upload, actor operations (conditions, ownership, HP), and an optional D&D-5e adapter (typed damage, rolls, rests) — all gated by read/write/destructive permission tiers.
+Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — reading and search across collections, generic document CRUD, embedded documents (journal pages, actor items), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, dice & roll tables, combat encounters, asset upload, actor operations (conditions, ownership, HP), roll tables, audio/playlists, chat-log reading, document duplication, and an optional D&D-5e adapter (typed damage, rolls, rests) — all gated by read/write/destructive permission tiers.
 
 See [HANDOFF.md on foundry-mcp:fix/audit-and-sdk-1x](https://github.com/SpaceToast1738/foundry-mcp/blob/fix/audit-and-sdk-1x/HANDOFF.md) for background on why we pivoted away from the raw-WebSocket approach.
 
@@ -67,6 +67,7 @@ AND-combined), `requested_fields` (projection; `_id`/`name`/`uuid` always includ
 | `create_document` | write | Create one or more top-level documents of a type (`Actor`, `Item`, `JournalEntry`, `Folder`, `Scene`, `User`, `RollTable`, `Playlist`, `Macro`, `Cards`). |
 | `modify_document` | write | Apply one or more deep-merged updates to a document by `_id`. |
 | `delete_document` | destructive | Delete documents by `_id`. Permanent; bulk-limited. |
+| `duplicate_document` | write | Clone a document (carries embedded items/pages); optional new name/folder. |
 
 ### Embedded documents
 For documents that live inside a parent — journal **pages** (`JournalEntryPage`), actor **items**/**effects**, scene placeables — edited without rewriting the whole parent.
@@ -101,10 +102,17 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `search_compendium` | read | Search a pack's index by name; returns `_id`, `name`, `type`, `uuid`, `img`. |
 | `import_from_compendium` | write | Import pack entries into the world as real documents (optional destination folder; fresh `_id`s). |
 
-### Chat · `write`
+### Chat
+| Tool | Tier | Description |
+|------|------|-------------|
+| `post_chat_message` | write | Post to the chat log. Optional `whisper` (`"gm"` or user refs), `blind`, `speaker_alias`. Public by default — prefer a GM whisper. |
+| `get_messages` | read | Read the most recent chat messages (alias, text, whisper, timestamp) for session context. |
+
+### Audio · `write`
 | Tool | Description |
 |------|-------------|
-| `post_chat_message` | Post to the Foundry chat log. Optional `whisper` (`"gm"` or user refs), `blind`, and `speaker_alias`. Public by default — prefer a GM whisper unless addressing the table. |
+| `play_playlist` / `stop_playlist` | Start/stop a playlist (music, ambiance), by `_id`/`name`. |
+| `play_sound` | Play a single sound within a playlist. |
 
 ### Scenes & tokens
 | Tool | Tier | Description |
@@ -114,11 +122,14 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `place_token` | write | Drop a token for an actor at pixel `(x,y)` on a scene (default active), from the actor's prototype token. |
 | `update_token` | write | Move/hide/rename a token on a scene by `_id`. (Delete via `delete_embedded`, `embedded:"Token"`.) |
 
-### Dice & tables · `read`
-| Tool | Description |
-|------|-------------|
-| `roll_dice` | Evaluate a dice formula (`"2d6+3"`, `"1d20+@abilities.dex.mod"`); returns total, result string, per-die results. No chat side effect. |
-| `draw_table` | Draw from a RollTable (by `_id`/`name`) without posting to chat or marking results drawn. Random encounters/loot/names. |
+### Dice & tables
+| Tool | Tier | Description |
+|------|------|-------------|
+| `roll_dice` | read | Evaluate a dice formula (`"2d6+3"`, `"1d20+@abilities.dex.mod"`); returns total, result, per-die. No chat. |
+| `draw_table` | read | Draw from a RollTable (by `_id`/`name`) without posting to chat or marking results drawn. |
+| `roll_to_chat` | write | Roll **and** post a dice card (optional `flavor`, `whisper`). |
+| `create_table` | write | Create a RollTable, optionally with `formula` + initial `results`. |
+| `add_table_results` | write | Add results to a table (strings or `{text, weight}`) and re-normalise. |
 
 ### Combat · `write`
 | Tool | Description |
