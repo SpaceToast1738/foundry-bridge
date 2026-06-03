@@ -16,6 +16,10 @@ permission tiers; this skill is about *how to work well and safely*. World-speci
    `"AI Instructions"`). If found, **follow it** — it defines this world's folder taxonomy, naming
    conventions, and what's off-limits. The GM's instructions override these defaults.
 
+**Finding things:** `where` only matches exact field values. To locate a document by a word in its name
+or journal text, use `search_documents` (substring, case-insensitive). Read results include each doc's
+`uuid` — cross-link documents with `@UUID[<uuid>]{label}` in HTML content.
+
 ## Core discipline
 - **Read before you write.** Inspect a document with the matching `get_*` before `modify_document` —
   schemas vary by game system and live under `system.*`.

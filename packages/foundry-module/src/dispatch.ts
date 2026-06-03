@@ -16,6 +16,7 @@ import {
   handleDocumentsList,
   handleDocumentsUpdate,
 } from "./handlers/documents.js";
+import { handleDocumentsSearch } from "./handlers/search.js";
 import {
   handleFoldersCreate,
   handleFoldersMove,
@@ -33,6 +34,8 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleDocumentsList(params as Parameters<typeof handleDocumentsList>[0]),
   [Method.DOCUMENTS_GET]: (params) =>
     handleDocumentsGet(params as Parameters<typeof handleDocumentsGet>[0]),
+  [Method.DOCUMENTS_SEARCH]: (params) =>
+    handleDocumentsSearch(params as Parameters<typeof handleDocumentsSearch>[0]),
   [Method.DOCUMENTS_CREATE]: (params) =>
     handleDocumentsCreate(params as Parameters<typeof handleDocumentsCreate>[0]),
   [Method.DOCUMENTS_UPDATE]: (params) =>

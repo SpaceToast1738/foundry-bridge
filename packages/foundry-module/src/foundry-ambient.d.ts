@@ -38,6 +38,11 @@ declare global {
     readonly journal?: { contents: unknown[]; get(id: string): unknown };
     readonly folders?: { contents: unknown[]; get(id: string): unknown };
     readonly scenes?: { contents: unknown[]; get(id: string): unknown };
+    readonly tables?: { contents: unknown[]; get(id: string): unknown };
+    readonly playlists?: { contents: unknown[]; get(id: string): unknown };
+    readonly macros?: { contents: unknown[]; get(id: string): unknown };
+    readonly cards?: { contents: unknown[]; get(id: string): unknown };
+    readonly combats?: { contents: unknown[]; get(id: string): unknown };
   }
 
   interface FoundryHooks {

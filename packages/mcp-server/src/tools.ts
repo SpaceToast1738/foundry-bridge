@@ -22,6 +22,11 @@ const READABLE_COLLECTIONS = [
   { tool: "folders", singular: "folder", collection: "folders" },
   { tool: "scenes", singular: "scene", collection: "scenes" },
   { tool: "users", singular: "user", collection: "users" },
+  { tool: "tables", singular: "table", collection: "tables" },
+  { tool: "playlists", singular: "playlist", collection: "playlists" },
+  { tool: "macros", singular: "macro", collection: "macros" },
+  { tool: "cards", singular: "card", collection: "cards" },
+  { tool: "combats", singular: "combat", collection: "combats" },
 ] as const;
 
 const listInputSchema = {
@@ -78,13 +83,13 @@ const getInputSchema = {
 const writableTypeProp = {
   type: "string",
   description:
-    "Document class name. One of: Actor, Item, JournalEntry, Folder, Scene, User.",
+    "Document class name. One of: Actor, Item, JournalEntry, Folder, Scene, User, RollTable, Playlist, Macro, Cards.",
 } as const;
 
 const folderableTypeProp = {
   type: "string",
   description:
-    "Document class name the folder organises. One of: Actor, Item, JournalEntry, Scene.",
+    "Document class name the folder organises. One of: Actor, Item, JournalEntry, Scene, RollTable, Playlist, Macro, Cards.",
 } as const;
 
 export function buildToolDefinitions(): ToolDef[] {
@@ -114,6 +119,33 @@ export function buildToolDefinitions(): ToolDef[] {
       inputSchema: getInputSchema,
     });
   }
+
+  tools.push({
+    name: "search_documents",
+    description:
+      "Keyword search across collections by name (and, for journals, page text). Case-insensitive substring match. Returns lightweight hits with _id, name, uuid, and a snippet where text matched. Use this to find a document when you don't know its exact name; use get_* with `where` for exact-field filtering.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Text to search for (case-insensitive substring)." },
+        collections: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Collections to search (e.g. [\"journal\",\"actors\"]). Defaults to all readable collections.",
+        },
+        include_text: {
+          type: "boolean",
+          description: "Search journal page text in addition to names. Default true.",
+        },
+        limit: {
+          type: "integer",
+          description: "Maximum number of hits to return. Default 50.",
+        },
+      },
+      required: ["query"],
+    },
+  });
 
   tools.push({
     name: "create_document",
@@ -243,6 +275,8 @@ export async function dispatchTool(
       return ctx.relay.call(Method.WORLD_GET, {});
     case "ping":
       return ctx.relay.call(Method.PING, {});
+    case "search_documents":
+      return ctx.relay.call(Method.DOCUMENTS_SEARCH, params);
     case "create_document":
       return ctx.relay.call(Method.DOCUMENTS_CREATE, params);
     case "modify_document":

@@ -10,6 +10,11 @@ export const READABLE_COLLECTIONS = [
   "folders",
   "scenes",
   "users",
+  "tables",
+  "playlists",
+  "macros",
+  "cards",
+  "combats",
 ] as const;
 
 export type ReadableCollection = (typeof READABLE_COLLECTIONS)[number];
@@ -25,6 +30,10 @@ export const WRITABLE_DOCUMENT_TYPES = [
   "Folder",
   "Scene",
   "User",
+  "RollTable",
+  "Playlist",
+  "Macro",
+  "Cards",
 ] as const;
 
 /** Document types that Foundry organises into folders. */
@@ -33,6 +42,10 @@ export const FOLDER_DOCUMENT_TYPES = [
   "Item",
   "JournalEntry",
   "Scene",
+  "RollTable",
+  "Playlist",
+  "Macro",
+  "Cards",
 ] as const;
 
 export type FolderDocumentType = (typeof FOLDER_DOCUMENT_TYPES)[number];
@@ -58,6 +71,10 @@ const DOC_TYPE_TO_COLLECTION: Record<WritableDocumentType, ReadableCollection> =
   Folder: "folders",
   Scene: "scenes",
   User: "users",
+  RollTable: "tables",
+  Playlist: "playlists",
+  Macro: "macros",
+  Cards: "cards",
 };
 
 export function collectionForType(
@@ -111,6 +128,16 @@ export function getCollection(name: string): FoundryCollection | undefined {
       return game.scenes as FoundryCollection | undefined;
     case "users":
       return game.users as FoundryCollection | undefined;
+    case "tables":
+      return game.tables as FoundryCollection | undefined;
+    case "playlists":
+      return game.playlists as FoundryCollection | undefined;
+    case "macros":
+      return game.macros as FoundryCollection | undefined;
+    case "cards":
+      return game.cards as FoundryCollection | undefined;
+    case "combats":
+      return game.combats as FoundryCollection | undefined;
     default:
       return undefined;
   }
@@ -143,14 +170,22 @@ export function findInCollection(
 interface MaybeSerializable {
   toObject?: () => Record<string, unknown>;
   toJSON?: () => Record<string, unknown>;
+  uuid?: unknown;
 }
 
 export function docToObject(doc: unknown): Record<string, unknown> {
   if (doc && typeof doc === "object") {
     const maybe = doc as MaybeSerializable;
-    if (typeof maybe.toObject === "function") return maybe.toObject();
-    if (typeof maybe.toJSON === "function") return maybe.toJSON();
-    return { ...(doc as Record<string, unknown>) };
+    let obj: Record<string, unknown>;
+    if (typeof maybe.toObject === "function") obj = maybe.toObject();
+    else if (typeof maybe.toJSON === "function") obj = maybe.toJSON();
+    else obj = { ...(doc as Record<string, unknown>) };
+    // Surface the document's UUID (a runtime getter, not part of toObject) so
+    // callers can build @UUID[...] links and resolve references.
+    if (obj.uuid === undefined && typeof maybe.uuid === "string") {
+      obj.uuid = maybe.uuid;
+    }
+    return obj;
   }
   return {};
 }

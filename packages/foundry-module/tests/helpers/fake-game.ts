@@ -40,6 +40,10 @@ export const WRITABLE_TYPES = [
   "Folder",
   "Scene",
   "User",
+  "RollTable",
+  "Playlist",
+  "Macro",
+  "Cards",
 ] as const;
 export type WritableType = (typeof WRITABLE_TYPES)[number];
 
@@ -54,6 +58,11 @@ export interface FakeGameOptions {
   folders?: FakeDoc[];
   scenes?: FakeDoc[];
   users?: FakeDoc[];
+  tables?: FakeDoc[];
+  playlists?: FakeDoc[];
+  macros?: FakeDoc[];
+  cards?: FakeDoc[];
+  combats?: FakeDoc[];
   settings?: Record<string, unknown>;
   /** Skip installing default Document classes (Actor, Item, etc.) on globalThis. */
   skipDocumentClasses?: boolean;
@@ -111,7 +120,12 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
     Folder: opts.folders ?? [],
     Scene: opts.scenes ?? [],
     User: opts.users ?? [],
+    RollTable: opts.tables ?? [],
+    Playlist: opts.playlists ?? [],
+    Macro: opts.macros ?? [],
+    Cards: opts.cards ?? [],
   };
+  const combatsStore = opts.combats ?? [];
   const prior = {
     game: (globalThis as { game?: unknown }).game,
     ui: (globalThis as { ui?: unknown }).ui,
@@ -129,6 +143,11 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
     folders: makeCollection(stores.Folder),
     scenes: makeCollection(stores.Scene),
     users: makeCollection(stores.User),
+    tables: makeCollection(stores.RollTable),
+    playlists: makeCollection(stores.Playlist),
+    macros: makeCollection(stores.Macro),
+    cards: makeCollection(stores.Cards),
+    combats: makeCollection(combatsStore),
     settings: {
       register: () => undefined,
       get: (_ns: string, key: string) => settingsStore.get(key),

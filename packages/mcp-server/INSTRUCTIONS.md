@@ -21,9 +21,23 @@ If a tool returns `FORBIDDEN`, the bridge user is not a GM, the relevant tier is
 
 ## Reading documents
 
-- `get_actors`, `get_items`, `get_journals`, `get_folders`, `get_scenes`, `get_users` return collections. Use `where` for AND-combined filtering and `requested_fields` to project. `max_length` (bytes) trims documents from the tail until the JSON fits.
+- List tools per collection: `get_actors`, `get_items`, `get_journals`, `get_folders`, `get_scenes`,
+  `get_users`, `get_tables`, `get_playlists`, `get_macros`, `get_cards`, `get_combats`. Use `where` for
+  AND-combined **exact-match** filtering and `requested_fields` to project. `max_length` (bytes) trims
+  documents from the tail until the JSON fits.
 - `get_actor` / `get_item` / etc. fetch a single document. Provide `_id` (preferred) or `name`.
-- **Always inspect a document before modifying it.** System-specific data lives under `system.*` and schemas vary by game system.
+- **`search_documents`** does case-insensitive **substring** search over names (and journal page text)
+  across collections — use it to find something when you don't know its exact name; use `where` only for
+  exact field matches. Returns lightweight hits (`_id`, `name`, `uuid`, snippet).
+- **Always inspect a document before modifying it.** System-specific data lives under `system.*` and
+  schemas vary by game system.
+
+## Linking documents (`@UUID`)
+
+Every read result includes the document's **`uuid`**. To cross-reference one document from another's
+text, embed a Foundry content link: `@UUID[<uuid>]{Optional label}` — e.g.
+`@UUID[JournalEntry.abc123]{The Hollow Vale}`. Foundry renders it as a clickable link. Resolve the
+target's `uuid` first (via `get_*` or `search_documents`), then write the link into the HTML content.
 
 ## Writing documents
 
