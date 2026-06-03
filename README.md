@@ -1,6 +1,6 @@
 # foundry-bridge
 
-Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — reading and search across collections, generic document CRUD, embedded documents (journal pages, actor items), folder filing, compendium browse + import, UUID cross-links, and chat — all gated by read/write/destructive permission tiers.
+Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — reading and search across collections, generic document CRUD, embedded documents (journal pages, actor items), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, dice & roll tables, combat encounters, and asset upload — all gated by read/write/destructive permission tiers.
 
 See [HANDOFF.md on foundry-mcp:fix/audit-and-sdk-1x](https://github.com/SpaceToast1738/foundry-mcp/blob/fix/audit-and-sdk-1x/HANDOFF.md) for background on why we pivoted away from the raw-WebSocket approach.
 
@@ -93,6 +93,36 @@ For documents that live inside a parent — journal **pages** (`JournalEntryPage
 | Tool | Description |
 |------|-------------|
 | `post_chat_message` | Post to the Foundry chat log. Optional `whisper` (`"gm"` or user refs), `blind`, and `speaker_alias`. Public by default — prefer a GM whisper unless addressing the table. |
+
+### Scenes & tokens
+| Tool | Tier | Description |
+|------|------|-------------|
+| `get_active_scene` | read | The scene players are viewing (id, name, dimensions, token count). |
+| `activate_scene` | write | Make a scene the active/viewed one (by `_id`/`name`). |
+| `place_token` | write | Drop a token for an actor at pixel `(x,y)` on a scene (default active), from the actor's prototype token. |
+| `update_token` | write | Move/hide/rename a token on a scene by `_id`. (Delete via `delete_embedded`, `embedded:"Token"`.) |
+
+### Dice & tables · `read`
+| Tool | Description |
+|------|-------------|
+| `roll_dice` | Evaluate a dice formula (`"2d6+3"`, `"1d20+@abilities.dex.mod"`); returns total, result string, per-die results. No chat side effect. |
+| `draw_table` | Draw from a RollTable (by `_id`/`name`) without posting to chat or marking results drawn. Random encounters/loot/names. |
+
+### Combat · `write`
+| Tool | Description |
+|------|-------------|
+| `start_combat` | Create + activate a combat encounter on a scene (default active). |
+| `add_combatants` | Add combatants from token `_id`s (default active combat). |
+| `roll_initiative` | Roll initiative for all (default) or an array of combatant `_id`s. |
+| `advance_combat` | `start` / `next` / `previous` / `end` (end removes the encounter). |
+
+All combat tools return `{ round, turn, combatants:[{ name, initiative, tokenId }] }`.
+
+### Assets & images
+| Tool | Tier | Description |
+|------|------|-------------|
+| `browse_files` | read | List directories/files under a data path (e.g. `worlds/<id>/assets`). |
+| `upload_image` | write | Upload a file from base64 into data storage; returns the stored `path` (set it on a doc via `modify_document {img}`). |
 
 ### Instance · `read`
 | Tool | Description |
