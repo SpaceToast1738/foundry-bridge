@@ -146,6 +146,18 @@ async function main() {
   page.on("pageerror", (err) => {
     log("error", `pageerror: ${err.message}`);
   });
+  // Diagnostic: surface failing network requests (URL + reason) so we can
+  // see what the page keeps retrying. Set FOUNDRY_BRIDGE_LOG_REQFAIL=false
+  // to silence once understood.
+  if (process.env.FOUNDRY_BRIDGE_LOG_REQFAIL !== "false") {
+    page.on("requestfailed", (request) => {
+      const f = request.failure();
+      log(
+        "req-failed",
+        `${request.method()} ${request.url()} — ${f ? f.errorText : "unknown"}`,
+      );
+    });
+  }
 
   await joinWorld(page, cred);
   await waitForBridgeReady(page);
