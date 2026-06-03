@@ -25,7 +25,11 @@ function toResultDocs(results: ResultInput[]): Record<string, unknown>[] {
   return results.map((r) => {
     const text = typeof r === "string" ? r : r.text;
     const weight = typeof r === "string" ? 1 : r.weight ?? 1;
-    return { type: "text", text, weight };
+    // Foundry v13+ requires a valid `range` at creation (a no-range result is
+    // silently rejected); normalize() recomputes ranges + the 1dN formula from
+    // weights afterwards. `name` is the displayed label; `text` populates the
+    // description for older readers.
+    return { type: "text", name: text, text, weight, range: [1, 1] };
   });
 }
 

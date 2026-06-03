@@ -27,8 +27,8 @@ describe("table handlers", () => {
     const res = await handleTableAddResults({ table: { _id: "rt1" }, results: ["sword", { text: "gold", weight: 3 }] });
     expect(res).toMatchObject({ table: "rt1", added: 2 });
     expect(added).toEqual([
-      { type: "text", text: "sword", weight: 1 },
-      { type: "text", text: "gold", weight: 3 },
+      { type: "text", name: "sword", text: "sword", weight: 1, range: [1, 1] },
+      { type: "text", name: "gold", text: "gold", weight: 3, range: [1, 1] },
     ]);
     expect(normalised).toBe(1);
     restore();

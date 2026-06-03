@@ -124,7 +124,7 @@ export async function handleTableDraw(
   }
   const out = await table.draw(options);
   const results = out.results.map((r) => ({
-    text: r.text ?? r.name,
+    text: r.name ?? r.text ?? r.description,
     documentUuid: r.documentUuid ?? r.documentId,
     img: r.img ?? r.icon,
   }));
