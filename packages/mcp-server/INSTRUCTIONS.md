@@ -85,6 +85,20 @@ entries, but those depend on a **module's stylesheet** (not core), so don't intr
 styling of your own. World-specific conventions belong in that world's GM-authored `AGENTS` journal —
 read it; don't invent your own.
 
+## Embedded documents
+
+Some documents live *inside* a parent: JournalEntry **pages** (`JournalEntryPage`), Actor **items** and
+**effects** (`Item`, `ActiveEffect`), Item effects (`ActiveEffect`), Scene placeables (`Token`, `Note`,
+`Wall`, …). Edit these **without rewriting the whole parent**:
+
+- `create_embedded` — append e.g. a page to a journal, or items to an actor:
+  `{ parent_type, parent_id, embedded, data: [ … ] }`.
+- `update_embedded` — edit one in place; each update object must include the embedded `_id`.
+- `delete_embedded` — remove by `_id` (destructive tier + bulk limit; permanent).
+
+Prefer these over replacing a parent's whole `pages`/`items` array. Inspect the parent with `get_*`
+first to match the embedded document's schema.
+
 ## Folder filing
 
 - `create_folder({type, name, parent?})` creates a folder for documents of `type` (Actor / Item / JournalEntry / Scene). `parent` is an optional folder `_id` for nesting.

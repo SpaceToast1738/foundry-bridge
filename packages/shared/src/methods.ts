@@ -9,6 +9,9 @@ export const Method = {
   DOCUMENTS_CREATE: "documents.create",
   DOCUMENTS_UPDATE: "documents.update",
   DOCUMENTS_DELETE: "documents.delete",
+  EMBEDDED_CREATE: "embedded.create",
+  EMBEDDED_UPDATE: "embedded.update",
+  EMBEDDED_DELETE: "embedded.delete",
   FOLDERS_CREATE: "folders.create",
   FOLDERS_MOVE: "folders.move",
 } as const;
@@ -24,6 +27,9 @@ export const methodSchema = z.enum([
   Method.DOCUMENTS_CREATE,
   Method.DOCUMENTS_UPDATE,
   Method.DOCUMENTS_DELETE,
+  Method.EMBEDDED_CREATE,
+  Method.EMBEDDED_UPDATE,
+  Method.EMBEDDED_DELETE,
   Method.FOLDERS_CREATE,
   Method.FOLDERS_MOVE,
 ]);
@@ -46,7 +52,10 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.DOCUMENTS_UPDATE]: PermissionTier.WRITE,
   [Method.FOLDERS_CREATE]: PermissionTier.WRITE,
   [Method.FOLDERS_MOVE]: PermissionTier.WRITE,
+  [Method.EMBEDDED_CREATE]: PermissionTier.WRITE,
+  [Method.EMBEDDED_UPDATE]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
+  [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
 
 const docRefSchema = z
@@ -90,6 +99,24 @@ export const paramSchemas = {
   }),
   [Method.DOCUMENTS_DELETE]: z.object({
     type: z.string().min(1),
+    ids: z.array(z.string().min(1)).min(1),
+  }),
+  [Method.EMBEDDED_CREATE]: z.object({
+    parent_type: z.string().min(1),
+    parent_id: z.string().min(1),
+    embedded: z.string().min(1),
+    data: z.array(z.record(z.string(), z.unknown())).min(1),
+  }),
+  [Method.EMBEDDED_UPDATE]: z.object({
+    parent_type: z.string().min(1),
+    parent_id: z.string().min(1),
+    embedded: z.string().min(1),
+    updates: z.array(z.record(z.string(), z.unknown())).min(1),
+  }),
+  [Method.EMBEDDED_DELETE]: z.object({
+    parent_type: z.string().min(1),
+    parent_id: z.string().min(1),
+    embedded: z.string().min(1),
     ids: z.array(z.string().min(1)).min(1),
   }),
   [Method.FOLDERS_CREATE]: z.object({

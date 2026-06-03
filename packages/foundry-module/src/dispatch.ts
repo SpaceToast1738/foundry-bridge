@@ -18,6 +18,11 @@ import {
 } from "./handlers/documents.js";
 import { handleDocumentsSearch } from "./handlers/search.js";
 import {
+  handleEmbeddedCreate,
+  handleEmbeddedDelete,
+  handleEmbeddedUpdate,
+} from "./handlers/embedded.js";
+import {
   handleFoldersCreate,
   handleFoldersMove,
 } from "./handlers/folders.js";
@@ -43,6 +48,15 @@ const handlers: Partial<Record<Method, Handler>> = {
   [Method.DOCUMENTS_DELETE]: (params, state) =>
     handleDocumentsDelete(
       params as Parameters<typeof handleDocumentsDelete>[0],
+      state,
+    ),
+  [Method.EMBEDDED_CREATE]: (params) =>
+    handleEmbeddedCreate(params as Parameters<typeof handleEmbeddedCreate>[0]),
+  [Method.EMBEDDED_UPDATE]: (params) =>
+    handleEmbeddedUpdate(params as Parameters<typeof handleEmbeddedUpdate>[0]),
+  [Method.EMBEDDED_DELETE]: (params, state) =>
+    handleEmbeddedDelete(
+      params as Parameters<typeof handleEmbeddedDelete>[0],
       state,
     ),
   [Method.FOLDERS_CREATE]: (params) =>

@@ -202,6 +202,74 @@ export function buildToolDefinitions(): ToolDef[] {
     },
   });
 
+  const embeddedParentProps = {
+    parent_type: {
+      type: "string",
+      description:
+        "The parent document's class name (e.g. JournalEntry, Actor, Item, Scene).",
+    },
+    parent_id: { type: "string", description: "The parent document's _id." },
+    embedded: {
+      type: "string",
+      description:
+        "Embedded document class name. Common: JournalEntryPage (in a JournalEntry); Item or ActiveEffect (in an Actor); ActiveEffect (in an Item).",
+    },
+  } as const;
+
+  tools.push({
+    name: "create_embedded",
+    description:
+      "Add embedded documents to a parent — e.g. append a page to a journal (JournalEntryPage) or add items/effects to an actor — without rewriting the whole parent. Inspect the parent with get_* first to match the embedded schema.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...embeddedParentProps,
+        data: {
+          type: "array",
+          items: { type: "object", additionalProperties: true },
+          description: "Embedded documents to create (at minimum a name).",
+        },
+      },
+      required: ["parent_type", "parent_id", "embedded", "data"],
+    },
+  });
+
+  tools.push({
+    name: "update_embedded",
+    description:
+      "Update embedded documents in place — e.g. edit a single journal page or one actor item. Each update object must include the embedded document's _id. Inspect the parent first so field paths are correct.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...embeddedParentProps,
+        updates: {
+          type: "array",
+          items: { type: "object", additionalProperties: true },
+          description: "Updates to apply; each must include the embedded `_id`.",
+        },
+      },
+      required: ["parent_type", "parent_id", "embedded", "updates"],
+    },
+  });
+
+  tools.push({
+    name: "delete_embedded",
+    description:
+      "Delete embedded documents (e.g. a journal page or actor item) by _id. Subject to the destructive tier and bulk limit. Permanent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...embeddedParentProps,
+        ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "The embedded document _ids to delete.",
+        },
+      },
+      required: ["parent_type", "parent_id", "embedded", "ids"],
+    },
+  });
+
   tools.push({
     name: "create_folder",
     description:
@@ -283,6 +351,12 @@ export async function dispatchTool(
       return ctx.relay.call(Method.DOCUMENTS_UPDATE, params);
     case "delete_document":
       return ctx.relay.call(Method.DOCUMENTS_DELETE, params);
+    case "create_embedded":
+      return ctx.relay.call(Method.EMBEDDED_CREATE, params);
+    case "update_embedded":
+      return ctx.relay.call(Method.EMBEDDED_UPDATE, params);
+    case "delete_embedded":
+      return ctx.relay.call(Method.EMBEDDED_DELETE, params);
     case "create_folder":
       return ctx.relay.call(Method.FOLDERS_CREATE, params);
     case "move_to_folder":

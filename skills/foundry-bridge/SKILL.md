@@ -37,7 +37,9 @@ Journals are **multi-page**: pass a `pages` array — one text page per section
 `ownership.default` for visibility (`0` = GM-only, `2` = player-visible). Inspect a neighbouring
 document of the same type first and match its structure/naming. **Default to semantic HTML**; reuse an
 existing entry's CSS classes only to match the world's look (they rely on a module's stylesheet) —
-don't invent your own styling. The server's `INSTRUCTIONS.md` has the full document/page model.
+don't invent your own styling. To add or edit a **single** journal page or actor item, use
+`create_embedded`/`update_embedded` instead of rewriting the parent's whole `pages`/`items` array.
+The server's `INSTRUCTIONS.md` has the full document/page model.
 
 ## Filing / organising recipe
 1. `get_folders` (e.g. `requested_fields: ["name","type","folder"]`) to see the current taxonomy.
