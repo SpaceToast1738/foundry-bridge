@@ -65,8 +65,11 @@ Each text page:
 Set it deliberately rather than relying on the default.
 
 **Fit in, don't impose.** Before creating content, list a few neighbouring documents with `get_*` and
-match their structure, naming, and section layout. World-specific conventions belong in that world's
-GM-authored `AGENTS` journal — read it; don't invent your own.
+match their structure, naming, and section layout. **Default to semantic HTML** — it always renders via
+Foundry core. To match a world's visual style you may reuse the CSS classes/layout you see in existing
+entries, but those depend on a **module's stylesheet** (not core), so don't introduce new class-based
+styling of your own. World-specific conventions belong in that world's GM-authored `AGENTS` journal —
+read it; don't invent your own.
 
 ## Folder filing
 
