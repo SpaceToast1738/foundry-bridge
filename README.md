@@ -1,6 +1,6 @@
 # foundry-bridge
 
-Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — reading and search across collections, generic document CRUD, embedded documents (journal pages, actor items), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, dice & roll tables, combat encounters, and asset upload — all gated by read/write/destructive permission tiers.
+Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — reading and search across collections, generic document CRUD, embedded documents (journal pages, actor items), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, dice & roll tables, combat encounters, asset upload, actor operations (conditions, ownership, HP), and an optional D&D-5e adapter (typed damage, rolls, rests) — all gated by read/write/destructive permission tiers.
 
 See [HANDOFF.md on foundry-mcp:fix/audit-and-sdk-1x](https://github.com/SpaceToast1738/foundry-mcp/blob/fix/audit-and-sdk-1x/HANDOFF.md) for background on why we pivoted away from the raw-WebSocket approach.
 
@@ -76,6 +76,18 @@ For documents that live inside a parent — journal **pages** (`JournalEntryPage
 | `update_embedded` | write | Edit embedded docs in place (each update needs the embedded `_id`). |
 | `delete_embedded` | destructive | Delete embedded docs by `_id`. Permanent; bulk-limited. |
 
+### Actors
+Generic actor operations (core APIs / capability-detected — no system schema baked in).
+| Tool | Tier | Description |
+|------|------|-------------|
+| `create_actor` | write | Create an actor (convenience over `create_document`). |
+| `grant_item` | write | Add an item to an actor — from a compendium (`pack`+`entry`) or inline `item`. |
+| `list_conditions` | read | The world's status conditions (id, name, img). |
+| `toggle_condition` | write | Toggle a condition on an actor (e.g. `prone`, `poisoned`). |
+| `get_roll_data` | read | An actor's `@`-data, to feed `roll_dice` (`@abilities.dex.mod`). |
+| `assign_actor` | write | Set a user's ownership of an actor (give a player their PC). |
+| `apply_damage` / `apply_healing` | write | Adjust HP via the system's `applyDamage()`; `UNAVAILABLE` if unsupported (use `modify_document`). |
+
 ### Folders · `write`
 | Tool | Description |
 |------|-------------|
@@ -123,6 +135,17 @@ All combat tools return `{ round, turn, combatants:[{ name, initiative, tokenId 
 |------|------|-------------|
 | `browse_files` | read | List directories/files under a data path (e.g. `worlds/<id>/assets`). |
 | `upload_image` | write | Upload a file from base64 into data storage; returns the stored `path` (set it on a doc via `modify_document {img}`). |
+
+### D&D 5e (system adapter)
+System-aware tools that only function on a **dnd5e** world (`BAD_REQUEST` otherwise); on 5e, prefer
+these over generic `apply_damage` as they respect damage types and traits.
+| Tool | Tier | Description |
+|------|------|-------------|
+| `dnd5e_apply_damage` | write | Typed damage respecting resistances/immunities/vulnerabilities (`type`, `multiplier`). |
+| `dnd5e_apply_healing` | write | Heal, or grant temporary HP (`temp:true`). |
+| `dnd5e_roll` | write | `save`/`check` (key = ability), `skill` (key = skill code), or `death`; returns the total. |
+| `dnd5e_rest` | write | Short or long rest (restores HP/resources). |
+| `dnd5e_actor_summary` | read | Compact HP / AC / abilities / level-or-CR sheet readout. |
 
 ### Instance · `read`
 | Tool | Description |
