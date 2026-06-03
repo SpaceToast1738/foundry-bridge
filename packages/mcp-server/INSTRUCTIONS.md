@@ -135,6 +135,15 @@ Prefer importing system content over hand-building it. Import first, then inspec
 
 Coordinates are scene pixels. Use `get_active_scene` for the scene's dimensions before placing.
 
+## Dice & tables
+
+- `roll_dice { formula, data? }` — evaluate a dice formula (`"2d6+3"`, `"1d20+@abilities.dex.mod"`).
+  Returns `total`, the `result` string, and per-die results. Does **not** post to chat.
+- `draw_table { table, formula? }` — draw from a RollTable (by `_id`/`name`). Returns the drawn
+  result(s) **without** posting to chat or marking them drawn. Use for random encounters/loot/names.
+
+Both are read-only (no side effects). To announce a roll or draw, pass the result to `post_chat_message`.
+
 ## Errors
 
 - `FORBIDDEN` — permission tier, GM gate, or bulk limit.

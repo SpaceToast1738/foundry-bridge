@@ -57,6 +57,8 @@ than hand-building from scratch. Then inspect/modify the world copy.
 ## Running the table
 - **Scenes/tokens:** `get_active_scene` for context; `activate_scene` to switch view; `place_token`
   (actor + x/y, defaults to the active scene) to drop a token; `update_token` to move/hide it.
+- **Dice/tables:** `roll_dice` evaluates a formula; `draw_table` pulls a random result. Neither posts
+  to chat — announce the outcome with `post_chat_message` if the table should see it.
 
 ## Speaking in-game
 To say something in the Foundry chat, use `post_chat_message`. Default to `whisper: "gm"` (GM-only)

@@ -38,6 +38,7 @@ import {
   handleTokenPlace,
   handleTokenUpdate,
 } from "./handlers/scenes.js";
+import { handleDiceRoll, handleTableDraw } from "./handlers/dice.js";
 
 export type Handler = (
   params: unknown,
@@ -94,6 +95,10 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleTokenPlace(params as Parameters<typeof handleTokenPlace>[0]),
   [Method.TOKEN_UPDATE]: (params) =>
     handleTokenUpdate(params as Parameters<typeof handleTokenUpdate>[0]),
+  [Method.DICE_ROLL]: (params) =>
+    handleDiceRoll(params as Parameters<typeof handleDiceRoll>[0]),
+  [Method.TABLE_DRAW]: (params) =>
+    handleTableDraw(params as Parameters<typeof handleTableDraw>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

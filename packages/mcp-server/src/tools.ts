@@ -371,6 +371,38 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "roll_dice",
+    description:
+      "Evaluate a Foundry dice formula (e.g. \"2d6+3\", \"1d20+@abilities.dex.mod\"). Returns the total, the rolled result string, and per-die results. Does not post to chat — follow with post_chat_message to announce it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        formula: { type: "string", description: "Dice formula, e.g. \"1d20+5\"." },
+        data: {
+          type: "object",
+          additionalProperties: true,
+          description: "Optional roll data for @-references (e.g. an actor's system data).",
+        },
+      },
+      required: ["formula"],
+    },
+  });
+
+  tools.push({
+    name: "draw_table",
+    description:
+      "Draw a result from a RollTable (by _id or name). Returns the drawn result(s) without posting to chat or marking them drawn. Use for random encounters/loot/names.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        table: docRefSchema,
+        formula: { type: "string", description: "Optional roll formula override." },
+      },
+      required: ["table"],
+    },
+  });
+
+  tools.push({
     name: "list_compendiums",
     description:
       "List the compendium packs available in the world (id, label, document type, system). Optionally filter by document type (e.g. Actor, Item).",
@@ -506,6 +538,12 @@ export async function dispatchTool(
       return ctx.relay.call(Method.TOKEN_PLACE, params);
     case "update_token":
       return ctx.relay.call(Method.TOKEN_UPDATE, params);
+    case "roll_dice":
+      return ctx.relay.call(Method.DICE_ROLL, params);
+    case "draw_table": {
+      const { table, ...rest } = params as Record<string, unknown>;
+      return ctx.relay.call(Method.TABLE_DRAW, { ref: table, ...rest });
+    }
     case "show_credentials":
       return getCredentialsInfo(ctx.credentials, ctx.activeIndex);
   }

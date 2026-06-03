@@ -22,6 +22,8 @@ export const Method = {
   SCENE_ACTIVATE: "scene.activate",
   TOKEN_PLACE: "token.place",
   TOKEN_UPDATE: "token.update",
+  DICE_ROLL: "dice.roll",
+  TABLE_DRAW: "table.draw",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -48,6 +50,8 @@ export const methodSchema = z.enum([
   Method.SCENE_ACTIVATE,
   Method.TOKEN_PLACE,
   Method.TOKEN_UPDATE,
+  Method.DICE_ROLL,
+  Method.TABLE_DRAW,
 ]);
 
 export const PermissionTier = {
@@ -78,6 +82,8 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.SCENE_ACTIVATE]: PermissionTier.WRITE,
   [Method.TOKEN_PLACE]: PermissionTier.WRITE,
   [Method.TOKEN_UPDATE]: PermissionTier.WRITE,
+  [Method.DICE_ROLL]: PermissionTier.READ,
+  [Method.TABLE_DRAW]: PermissionTier.READ,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
@@ -187,6 +193,14 @@ export const paramSchemas = {
     scene: docRefSchema.optional(),
     token_id: z.string().min(1),
     updates: z.record(z.string(), z.unknown()),
+  }),
+  [Method.DICE_ROLL]: z.object({
+    formula: z.string().min(1),
+    data: z.record(z.string(), z.unknown()).optional(),
+  }),
+  [Method.TABLE_DRAW]: z.object({
+    ref: docRefSchema,
+    formula: z.string().min(1).optional(),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 
