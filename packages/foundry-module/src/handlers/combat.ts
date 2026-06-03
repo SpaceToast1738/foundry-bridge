@@ -30,6 +30,7 @@ interface CombatDoc {
   nextTurn(): Promise<unknown>;
   previousTurn(): Promise<unknown>;
   endCombat(): Promise<unknown>;
+  delete?: () => Promise<unknown>;
   activate?(): Promise<unknown>;
 }
 interface CombatCtor {
@@ -151,7 +152,10 @@ export async function handleCombatAdvance(
       await combat.previousTurn();
       break;
     case "end":
-      await combat.endCombat();
+      // endCombat() pops a confirmation dialog that hangs the headless browser;
+      // delete the document directly instead.
+      if (typeof combat.delete === "function") await combat.delete();
+      else await combat.endCombat();
       return { _id: combat.id, ended: true };
   }
   return combatState(combat);
