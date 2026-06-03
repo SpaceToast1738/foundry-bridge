@@ -1,6 +1,6 @@
 # foundry-bridge
 
-Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — reading and search across collections, generic document CRUD, embedded documents (journal pages, actor items), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, dice & roll tables, combat encounters, asset upload, actor operations (conditions, ownership, HP), roll tables, audio/playlists, chat-log reading, document duplication, and an optional D&D-5e adapter (typed damage, rolls, rests) — all gated by read/write/destructive permission tiers.
+Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — reading and search across collections, generic document CRUD, embedded documents (journal pages, actor items), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, dice & roll tables, combat encounters, asset upload, actor operations (conditions, ownership, HP), roll tables, audio/playlists, chat-log reading, document duplication, player presentation (show/pull/ping), scene environment, and macro execution, plus an optional D&D-5e adapter (typed damage, rolls, rests) — all gated by read/write/destructive permission tiers.
 
 See [HANDOFF.md on foundry-mcp:fix/audit-and-sdk-1x](https://github.com/SpaceToast1738/foundry-mcp/blob/fix/audit-and-sdk-1x/HANDOFF.md) for background on why we pivoted away from the raw-WebSocket approach.
 
@@ -121,6 +121,8 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `activate_scene` | write | Make a scene the active/viewed one (by `_id`/`name`). |
 | `place_token` | write | Drop a token for an actor at pixel `(x,y)` on a scene (default active), from the actor's prototype token. |
 | `update_token` | write | Move/hide/rename a token on a scene by `_id`. (Delete via `delete_embedded`, `embedded:"Token"`.) |
+| `update_scene` | write | Update a scene's environment/config (darkness, grid, weather, background); default active. |
+| `reset_fog` | write | Clear the fog of war / exploration on a scene. |
 
 ### Dice & tables
 | Tool | Tier | Description |
@@ -137,7 +139,9 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `start_combat` | Create + activate a combat encounter on a scene (default active). |
 | `add_combatants` | Add combatants from token `_id`s (default active combat). |
 | `roll_initiative` | Roll initiative for all (default) or an array of combatant `_id`s. |
-| `advance_combat` | `start` / `next` / `previous` / `end` (end removes the encounter). |
+| `advance_combat` | `start` / `next` / `previous` / `next_round` / `previous_round` / `end` (end removes the encounter). |
+| `set_initiative` | Set a combatant's initiative value. |
+| `remove_combatant` | Remove combatants from the encounter by `_id`. |
 
 All combat tools return `{ round, turn, combatants:[{ name, initiative, tokenId }] }`.
 
@@ -157,6 +161,18 @@ these over generic `apply_damage` as they respect damage types and traits.
 | `dnd5e_roll` | write | `save`/`check` (key = ability), `skill` (key = skill code), or `death`; returns the total. |
 | `dnd5e_rest` | write | Short or long rest (restores HP/resources). |
 | `dnd5e_actor_summary` | read | Compact HP / AC / abilities / level-or-CR sheet readout. |
+
+### Present to players · `write`
+| Tool | Description |
+|------|-------------|
+| `show_to_players` | Pop a shared image, or show a journal, to all players. |
+| `pull_to_scene` | Pull all players' views to a scene. |
+| `ping_location` | Ping a point `(x,y)` on the active scene's canvas. |
+
+### Macros · `destructive`
+| Tool | Description |
+|------|-------------|
+| `execute_macro` | Run a stored macro by `_id`/`name` (optional `args`). Runs arbitrary code — destructive-tier gated. |
 
 ### Instance · `read`
 | Tool | Description |

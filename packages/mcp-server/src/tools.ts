@@ -853,6 +853,102 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "show_to_players",
+    description:
+      "Show content to all players: an `image` (path → popout on everyone's screen) or a `journal` (by `_id`/`name`). Optional `title`.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        image: { type: "string", description: "Image path to share (popout)." },
+        journal: docRefSchema,
+        title: { type: "string", description: "Optional popout title." },
+      },
+      required: [],
+    },
+  });
+
+  tools.push({
+    name: "pull_to_scene",
+    description: "Pull all players' views to a scene (by `_id`/`name`).",
+    inputSchema: { type: "object", properties: { scene: docRefSchema }, required: ["scene"] },
+  });
+
+  tools.push({
+    name: "ping_location",
+    description: "Ping a point on the active scene's canvas at pixel `(x, y)` to draw players' attention.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        x: { type: "number" },
+        y: { type: "number" },
+        scene: docRefSchema,
+      },
+      required: ["x", "y"],
+    },
+  });
+
+  tools.push({
+    name: "update_scene",
+    description:
+      "Update a scene's environment/config (defaults to the active scene): e.g. `{ darkness: 0.8 }`, grid, weather, background. Inspect the scene with get_scene first for field paths.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene: docRefSchema,
+        updates: { type: "object", additionalProperties: true, description: "Fields to update." },
+      },
+      required: ["updates"],
+    },
+  });
+
+  tools.push({
+    name: "reset_fog",
+    description: "Reset (clear) the fog of war / exploration on a scene (defaults to the active scene).",
+    inputSchema: { type: "object", properties: { scene: docRefSchema }, required: [] },
+  });
+
+  tools.push({
+    name: "set_initiative",
+    description: "Set a combatant's initiative value in a combat (defaults to the active combat).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        combat: docRefSchema,
+        combatant: { type: "string", description: "Combatant _id." },
+        value: { type: "number", description: "Initiative value." },
+      },
+      required: ["combatant", "value"],
+    },
+  });
+
+  tools.push({
+    name: "remove_combatant",
+    description: "Remove combatants from a combat by their _id(s) (defaults to the active combat).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        combat: docRefSchema,
+        combatants: { type: "array", items: { type: "string" }, description: "Combatant _ids to remove." },
+      },
+      required: ["combatants"],
+    },
+  });
+
+  tools.push({
+    name: "execute_macro",
+    description:
+      "Run a stored macro by `_id`/`name`, optionally passing a `scope` object. Runs arbitrary stored code — gated behind the destructive tier.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        macro: docRefSchema,
+        args: { type: "object", additionalProperties: true, description: "Optional scope passed to the macro." },
+      },
+      required: ["macro"],
+    },
+  });
+
+  tools.push({
     name: "show_credentials",
     description:
       "List the Foundry credentials this bridge is configured with. Passwords are never returned.",
@@ -949,6 +1045,22 @@ export async function dispatchTool(
       return ctx.relay.call(Method.DICE_ROLL_TO_CHAT, params);
     case "duplicate_document":
       return ctx.relay.call(Method.DOCUMENTS_DUPLICATE, params);
+    case "show_to_players":
+      return ctx.relay.call(Method.PRESENT_SHOW, params);
+    case "pull_to_scene":
+      return ctx.relay.call(Method.PRESENT_PULL, params);
+    case "ping_location":
+      return ctx.relay.call(Method.PRESENT_PING, params);
+    case "update_scene":
+      return ctx.relay.call(Method.SCENE_UPDATE, params);
+    case "reset_fog":
+      return ctx.relay.call(Method.SCENE_RESET_FOG, params);
+    case "set_initiative":
+      return ctx.relay.call(Method.COMBAT_SET_INITIATIVE, params);
+    case "remove_combatant":
+      return ctx.relay.call(Method.COMBAT_REMOVE, params);
+    case "execute_macro":
+      return ctx.relay.call(Method.MACRO_EXECUTE, params);
     case "post_chat_message":
       return ctx.relay.call(Method.MESSAGES_CREATE, params);
     case "get_active_scene":

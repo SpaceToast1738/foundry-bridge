@@ -29,8 +29,12 @@ interface CombatDoc {
   startCombat(): Promise<unknown>;
   nextTurn(): Promise<unknown>;
   previousTurn(): Promise<unknown>;
+  nextRound(): Promise<unknown>;
+  previousRound(): Promise<unknown>;
   endCombat(): Promise<unknown>;
   delete?: () => Promise<unknown>;
+  setInitiative(combatantId: string, value: number): Promise<unknown>;
+  deleteEmbeddedDocuments(name: string, ids: string[]): Promise<unknown[]>;
   activate?(): Promise<unknown>;
 }
 interface CombatCtor {
@@ -137,6 +141,22 @@ export async function handleCombatRollInitiative(
   return combatState(combat);
 }
 
+export async function handleCombatSetInitiative(
+  params: ParamsFor<typeof Method.COMBAT_SET_INITIATIVE>,
+): Promise<Record<string, unknown>> {
+  const combat = resolveCombat(params.combat);
+  await combat.setInitiative(params.combatant, params.value);
+  return combatState(combat);
+}
+
+export async function handleCombatRemove(
+  params: ParamsFor<typeof Method.COMBAT_REMOVE>,
+): Promise<Record<string, unknown>> {
+  const combat = resolveCombat(params.combat);
+  await combat.deleteEmbeddedDocuments("Combatant", params.combatants);
+  return combatState(combat);
+}
+
 export async function handleCombatAdvance(
   params: ParamsFor<typeof Method.COMBAT_ADVANCE>,
 ): Promise<Record<string, unknown>> {
@@ -150,6 +170,12 @@ export async function handleCombatAdvance(
       break;
     case "previous":
       await combat.previousTurn();
+      break;
+    case "next_round":
+      await combat.nextRound();
+      break;
+    case "previous_round":
+      await combat.previousRound();
       break;
     case "end":
       // endCombat() pops a confirmation dialog that hangs the headless browser;

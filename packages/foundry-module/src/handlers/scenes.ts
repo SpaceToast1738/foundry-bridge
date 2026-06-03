@@ -18,6 +18,8 @@ interface SceneDoc {
   height?: number;
   tokens?: { size?: number; contents?: unknown[] };
   activate(): Promise<unknown>;
+  update(data: Record<string, unknown>): Promise<unknown>;
+  resetFog?: () => Promise<unknown>;
   createEmbeddedDocuments(name: string, data: Record<string, unknown>[]): Promise<unknown[]>;
   updateEmbeddedDocuments(name: string, updates: Record<string, unknown>[]): Promise<unknown[]>;
 }
@@ -119,6 +121,25 @@ export async function handleTokenPlace(
     throw new BridgeError(ErrorCode.INTERNAL, "Token creation returned nothing");
   }
   return docToObject(created[0]);
+}
+
+export async function handleSceneUpdate(
+  params: ParamsFor<typeof Method.SCENE_UPDATE>,
+): Promise<Record<string, unknown>> {
+  const scene = resolveScene(params.scene);
+  await scene.update(params.updates);
+  return sceneDescriptor(scene, scene === getActiveScene());
+}
+
+export async function handleSceneResetFog(
+  params: ParamsFor<typeof Method.SCENE_RESET_FOG>,
+): Promise<Record<string, unknown>> {
+  const scene = resolveScene(params?.scene);
+  if (typeof scene.resetFog !== "function") {
+    throw new BridgeError(ErrorCode.UNAVAILABLE, "Scene does not support resetFog()");
+  }
+  await scene.resetFog();
+  return { scene: scene.id, fogReset: true };
 }
 
 export async function handleTokenUpdate(

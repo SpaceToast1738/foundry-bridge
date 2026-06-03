@@ -186,6 +186,10 @@ Prefer importing system content over hand-building it. Import first, then inspec
 
 Coordinates are scene pixels. Use `get_active_scene` for the scene's dimensions before placing.
 
+- `update_scene { scene?, updates }` — change a scene's environment/config (e.g. `{ darkness: 0.8 }`,
+  grid, weather, background); defaults to the active scene. Inspect with `get_scene` first for paths.
+- `reset_fog { scene? }` — clear the fog of war / exploration on a scene.
+
 ## Dice & tables
 
 - `roll_dice { formula, data? }` — evaluate a dice formula (`"2d6+3"`, `"1d20+@abilities.dex.mod"`).
@@ -205,11 +209,25 @@ Build tables so `draw_table` has content: `create_table { name, formula?, result
 - `add_combatants { tokens, combat? }` — add token `_id`s as combatants (place tokens first with
   `place_token`); defaults to the active combat.
 - `roll_initiative { combat?, combatants? }` — roll for `"all"` (default) or an array of combatant `_id`s.
-- `advance_combat { action, combat? }` — `"start"` | `"next"` | `"previous"` | `"end"` (end removes the
-  encounter).
+- `advance_combat { action, combat? }` — `"start"` | `"next"` | `"previous"` | `"next_round"` |
+  `"previous_round"` | `"end"` (end removes the encounter).
+- `set_initiative { combatant, value, combat? }` — set a combatant's initiative.
+- `remove_combatant { combatants: [ids], combat? }` — remove combatants from the encounter.
 
 All return combat state: `{ round, turn, combatants:[{ name, initiative, tokenId }] }`. Typical flow:
 `start_combat` → `place_token`/`add_combatants` → `roll_initiative` → `advance_combat "start"` → `"next"` …
+
+## Presenting to players
+
+- `show_to_players { image? | journal?, title? }` — pop a shared **image** onto every player's screen,
+  or show a **journal** to all players.
+- `pull_to_scene { scene }` — pull all players' views to a scene.
+- `ping_location { x, y, scene? }` — ping a point on the active scene to draw attention.
+
+## Macros
+
+- `execute_macro { macro, args? }` — run a stored macro by `_id`/`name`. **Runs arbitrary stored code**,
+  so it's gated behind the **destructive** tier (returns `FORBIDDEN` unless that tier is enabled).
 
 ## Errors
 

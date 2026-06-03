@@ -51,6 +51,14 @@ export const Method = {
   MESSAGES_LIST: "messages.list",
   DICE_ROLL_TO_CHAT: "dice.roll_to_chat",
   DOCUMENTS_DUPLICATE: "documents.duplicate",
+  PRESENT_SHOW: "present.show_to_players",
+  PRESENT_PULL: "present.pull_to_scene",
+  PRESENT_PING: "present.ping",
+  SCENE_UPDATE: "scene.update",
+  SCENE_RESET_FOG: "scene.reset_fog",
+  COMBAT_SET_INITIATIVE: "combat.set_initiative",
+  COMBAT_REMOVE: "combat.remove_combatant",
+  MACRO_EXECUTE: "macro.execute",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -106,6 +114,14 @@ export const methodSchema = z.enum([
   Method.MESSAGES_LIST,
   Method.DICE_ROLL_TO_CHAT,
   Method.DOCUMENTS_DUPLICATE,
+  Method.PRESENT_SHOW,
+  Method.PRESENT_PULL,
+  Method.PRESENT_PING,
+  Method.SCENE_UPDATE,
+  Method.SCENE_RESET_FOG,
+  Method.COMBAT_SET_INITIATIVE,
+  Method.COMBAT_REMOVE,
+  Method.MACRO_EXECUTE,
 ]);
 
 export const PermissionTier = {
@@ -165,7 +181,15 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.MESSAGES_LIST]: PermissionTier.READ,
   [Method.DICE_ROLL_TO_CHAT]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DUPLICATE]: PermissionTier.WRITE,
+  [Method.PRESENT_SHOW]: PermissionTier.WRITE,
+  [Method.PRESENT_PULL]: PermissionTier.WRITE,
+  [Method.PRESENT_PING]: PermissionTier.WRITE,
+  [Method.SCENE_UPDATE]: PermissionTier.WRITE,
+  [Method.SCENE_RESET_FOG]: PermissionTier.WRITE,
+  [Method.COMBAT_SET_INITIATIVE]: PermissionTier.WRITE,
+  [Method.COMBAT_REMOVE]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
+  [Method.MACRO_EXECUTE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
 
@@ -304,7 +328,14 @@ export const paramSchemas = {
   }),
   [Method.COMBAT_ADVANCE]: z.object({
     combat: docRefSchema.optional(),
-    action: z.enum(["start", "next", "previous", "end"]),
+    action: z.enum([
+      "start",
+      "next",
+      "previous",
+      "end",
+      "next_round",
+      "previous_round",
+    ]),
   }),
   [Method.FILES_BROWSE]: z.object({
     target: z.string(),
@@ -399,6 +430,41 @@ export const paramSchemas = {
     ref: docRefSchema,
     name: z.string().min(1).optional(),
     folder: z.string().min(1).optional(),
+  }),
+  [Method.PRESENT_SHOW]: z
+    .object({
+      image: z.string().min(1).optional(),
+      journal: docRefSchema.optional(),
+      title: z.string().min(1).optional(),
+    })
+    .refine((v) => v.image || v.journal, {
+      message: "Provide `image` (a path) or `journal` (a reference)",
+    }),
+  [Method.PRESENT_PULL]: z.object({ scene: docRefSchema }),
+  [Method.PRESENT_PING]: z.object({
+    x: z.number(),
+    y: z.number(),
+    scene: docRefSchema.optional(),
+  }),
+  [Method.SCENE_UPDATE]: z.object({
+    scene: docRefSchema.optional(),
+    updates: z.record(z.string(), z.unknown()),
+  }),
+  [Method.SCENE_RESET_FOG]: z
+    .object({ scene: docRefSchema.optional() })
+    .optional(),
+  [Method.COMBAT_SET_INITIATIVE]: z.object({
+    combat: docRefSchema.optional(),
+    combatant: z.string().min(1),
+    value: z.number(),
+  }),
+  [Method.COMBAT_REMOVE]: z.object({
+    combat: docRefSchema.optional(),
+    combatants: z.array(z.string().min(1)).min(1),
+  }),
+  [Method.MACRO_EXECUTE]: z.object({
+    macro: docRefSchema,
+    args: z.record(z.string(), z.unknown()).optional(),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

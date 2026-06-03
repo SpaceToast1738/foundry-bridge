@@ -76,7 +76,10 @@ On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed
 - **Read chat / duplicate:** `get_messages` reads recent chat for context; `duplicate_document` clones
   an actor/item/journal (great for reskinning).
 - **Combat:** `start_combat` → `add_combatants` (token ids) → `roll_initiative` → `advance_combat`
-  (`next`/`end`). All return the current round/turn/initiative state.
+  (`next`/`next_round`/`end`); `set_initiative`/`remove_combatant` for fine control.
+- **Scene env:** `update_scene` (darkness/lighting/weather), `reset_fog`.
+- **Present:** `show_to_players` (image/journal), `pull_to_scene`, `ping_location`.
+- **Macros:** `execute_macro` runs stored code — destructive-tier gated; use sparingly.
 
 ## Speaking in-game
 To say something in the Foundry chat, use `post_chat_message`. Default to `whisper: "gm"` (GM-only)

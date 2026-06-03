@@ -42,6 +42,8 @@ import { handleMessagesCreate, handleMessagesList } from "./handlers/messages.js
 import {
   handleSceneActivate,
   handleSceneActive,
+  handleSceneResetFog,
+  handleSceneUpdate,
   handleTokenPlace,
   handleTokenUpdate,
 } from "./handlers/scenes.js";
@@ -54,8 +56,16 @@ import {
   handleCombatAdd,
   handleCombatAdvance,
   handleCombatCreate,
+  handleCombatRemove,
   handleCombatRollInitiative,
+  handleCombatSetInitiative,
 } from "./handlers/combat.js";
+import {
+  handlePresentPing,
+  handlePresentPull,
+  handlePresentShow,
+} from "./handlers/present.js";
+import { handleMacroExecute } from "./handlers/macro.js";
 import { handleFilesBrowse, handleFilesUpload } from "./handlers/files.js";
 import {
   handleActorApplyDamage,
@@ -191,6 +201,22 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleDiceRollToChat(params as Parameters<typeof handleDiceRollToChat>[0]),
   [Method.DOCUMENTS_DUPLICATE]: (params) =>
     handleDocumentsDuplicate(params as Parameters<typeof handleDocumentsDuplicate>[0]),
+  [Method.PRESENT_SHOW]: (params) =>
+    handlePresentShow(params as Parameters<typeof handlePresentShow>[0]),
+  [Method.PRESENT_PULL]: (params) =>
+    handlePresentPull(params as Parameters<typeof handlePresentPull>[0]),
+  [Method.PRESENT_PING]: (params) =>
+    handlePresentPing(params as Parameters<typeof handlePresentPing>[0]),
+  [Method.SCENE_UPDATE]: (params) =>
+    handleSceneUpdate(params as Parameters<typeof handleSceneUpdate>[0]),
+  [Method.SCENE_RESET_FOG]: (params) =>
+    handleSceneResetFog(params as Parameters<typeof handleSceneResetFog>[0]),
+  [Method.COMBAT_SET_INITIATIVE]: (params) =>
+    handleCombatSetInitiative(params as Parameters<typeof handleCombatSetInitiative>[0]),
+  [Method.COMBAT_REMOVE]: (params) =>
+    handleCombatRemove(params as Parameters<typeof handleCombatRemove>[0]),
+  [Method.MACRO_EXECUTE]: (params) =>
+    handleMacroExecute(params as Parameters<typeof handleMacroExecute>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {
