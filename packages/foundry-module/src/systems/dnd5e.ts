@@ -101,20 +101,26 @@ export async function handleDnd5eRoll(
   let result: unknown;
 
   const call = async (
-    v4: ((cfg: Record<string, unknown>) => Promise<unknown>) | undefined,
-    v3: ((k: string) => Promise<unknown>) | undefined,
+    v4: ((...args: unknown[]) => Promise<unknown>) | undefined,
+    v3: ((...args: unknown[]) => Promise<unknown>) | undefined,
     cfg: Record<string, unknown>,
     positional: string | undefined,
   ): Promise<unknown> => {
     if (typeof v4 === "function") {
       try {
-        return await v4(cfg);
+        // dnd5e v4+ signature is (config, dialog, message). Skip the dialog so
+        // it can't hang waiting for a click in the headless browser, and don't
+        // post a chat card (the caller can use post_chat_message).
+        return await v4(cfg, { configure: false }, { create: false });
       } catch {
-        /* fall through to v3 */
+        /* fall through to the v3 signature */
       }
     }
-    if (typeof v3 === "function" && positional !== undefined) return v3(positional);
-    if (typeof v3 === "function") return (v3 as () => Promise<unknown>)();
+    if (typeof v3 === "function") {
+      // dnd5e v3 signature is (id?, { fastForward, chatMessage }).
+      const opts = { fastForward: true, chatMessage: false };
+      return positional !== undefined ? v3(positional, opts) : v3(opts);
+    }
     throw new BridgeError(ErrorCode.UNAVAILABLE, `dnd5e roll '${params.kind}' is not supported by this actor`);
   };
 
@@ -136,9 +142,9 @@ export async function handleDnd5eRoll(
         throw new BridgeError(ErrorCode.UNAVAILABLE, "rollDeathSave not supported");
       }
       try {
-        result = await actor.rollDeathSave({});
+        result = await actor.rollDeathSave({}, { configure: false }, { create: false });
       } catch {
-        result = await actor.rollDeathSave();
+        result = await actor.rollDeathSave({ fastForward: true, chatMessage: false });
       }
       break;
   }
