@@ -31,6 +31,7 @@ import {
   handleFoldersCreate,
   handleFoldersMove,
 } from "./handlers/folders.js";
+import { handleMessagesCreate } from "./handlers/messages.js";
 
 export type Handler = (
   params: unknown,
@@ -78,6 +79,8 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleFoldersCreate(params as Parameters<typeof handleFoldersCreate>[0]),
   [Method.FOLDERS_MOVE]: (params) =>
     handleFoldersMove(params as Parameters<typeof handleFoldersMove>[0]),
+  [Method.MESSAGES_CREATE]: (params) =>
+    handleMessagesCreate(params as Parameters<typeof handleMessagesCreate>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

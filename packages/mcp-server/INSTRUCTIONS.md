@@ -117,6 +117,13 @@ Prefer importing system content over hand-building it. Import first, then inspec
 - `create_folder({type, name, parent?})` creates a folder for documents of `type` (Actor / Item / JournalEntry / Scene). `parent` is an optional folder `_id` for nesting.
 - `move_to_folder({type, entity, folder})` files an entity. `folder: null` moves to the root. `entity` and `folder` accept `{_id}` or `{name}`.
 
+## Chat
+
+- `post_chat_message { content, whisper?, blind?, speaker_alias? }` posts to the Foundry chat log.
+  By default **everyone** sees it; set `whisper: "gm"` (or a list of `{_id|name}` user refs) to keep it
+  private. `speaker_alias` sets the displayed speaker name. Use sparingly — public messages appear live
+  in players' chat; prefer a GM whisper unless asked to address the table.
+
 ## Errors
 
 - `FORBIDDEN` — permission tier, GM gate, or bulk limit.

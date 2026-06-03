@@ -17,6 +17,7 @@ export const Method = {
   COMPENDIUM_IMPORT: "compendium.import",
   FOLDERS_CREATE: "folders.create",
   FOLDERS_MOVE: "folders.move",
+  MESSAGES_CREATE: "messages.create",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -38,6 +39,7 @@ export const methodSchema = z.enum([
   Method.COMPENDIUM_IMPORT,
   Method.FOLDERS_CREATE,
   Method.FOLDERS_MOVE,
+  Method.MESSAGES_CREATE,
 ]);
 
 export const PermissionTier = {
@@ -63,6 +65,7 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.COMPENDIUM_LIST]: PermissionTier.READ,
   [Method.COMPENDIUM_SEARCH]: PermissionTier.READ,
   [Method.COMPENDIUM_IMPORT]: PermissionTier.WRITE,
+  [Method.MESSAGES_CREATE]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
@@ -151,6 +154,12 @@ export const paramSchemas = {
     type: z.string().min(1),
     entity: docRefSchema,
     folder: z.union([docRefSchema, z.null()]),
+  }),
+  [Method.MESSAGES_CREATE]: z.object({
+    content: z.string().min(1),
+    whisper: z.union([z.literal("gm"), z.array(docRefSchema)]).optional(),
+    blind: z.boolean().optional(),
+    speaker_alias: z.string().min(1).optional(),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

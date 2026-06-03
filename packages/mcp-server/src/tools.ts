@@ -370,6 +370,28 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "post_chat_message",
+    description:
+      "Post a message to the Foundry chat log. By default visible to everyone; set whisper to \"gm\" (or a list of user refs) to restrict it. Use sparingly — it appears live in players' chat unless whispered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        content: { type: "string", description: "Message HTML/text." },
+        whisper: {
+          description:
+            "Optional. \"gm\" to whisper all GMs, or an array of {_id|name} user references.",
+        },
+        blind: { type: "boolean", description: "Optional. Hide the message from its author." },
+        speaker_alias: {
+          type: "string",
+          description: "Optional display name for the speaker.",
+        },
+      },
+      required: ["content"],
+    },
+  });
+
+  tools.push({
     name: "show_credentials",
     description:
       "List the Foundry credentials this bridge is configured with. Passwords are never returned.",
@@ -420,6 +442,8 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMPENDIUM_SEARCH, params);
     case "import_from_compendium":
       return ctx.relay.call(Method.COMPENDIUM_IMPORT, params);
+    case "post_chat_message":
+      return ctx.relay.call(Method.MESSAGES_CREATE, params);
     case "show_credentials":
       return getCredentialsInfo(ctx.credentials, ctx.activeIndex);
   }

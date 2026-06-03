@@ -54,6 +54,10 @@ than hand-building from scratch. Then inspect/modify the world copy.
    `folder: null` moves to the root.
 4. Verify with a follow-up `get_*` filtered by `where: {"folder": "<id>"}`.
 
+## Speaking in-game
+To say something in the Foundry chat, use `post_chat_message`. Default to `whisper: "gm"` (GM-only)
+unless the user explicitly wants players to see it — public messages appear live in everyone's chat.
+
 ## Errors (don't blind-retry)
 - `FORBIDDEN` — tier off, not GM, or bulk-limit exceeded → tell the human.
 - `NOT_FOUND` — ref didn't resolve → list and check the exact name / `_id`.
