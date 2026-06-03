@@ -56,6 +56,13 @@ import {
   handleActorToggleCondition,
   handleConditionsList,
 } from "./handlers/actors.js";
+import {
+  handleDnd5eActorSummary,
+  handleDnd5eApplyDamage,
+  handleDnd5eApplyHealing,
+  handleDnd5eRest,
+  handleDnd5eRoll,
+} from "./systems/dnd5e.js";
 
 export type Handler = (
   params: unknown,
@@ -147,6 +154,16 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleActorApplyDamage(params as Parameters<typeof handleActorApplyDamage>[0]),
   [Method.ACTOR_APPLY_HEALING]: (params) =>
     handleActorApplyHealing(params as Parameters<typeof handleActorApplyHealing>[0]),
+  [Method.DND5E_APPLY_DAMAGE]: (params) =>
+    handleDnd5eApplyDamage(params as Parameters<typeof handleDnd5eApplyDamage>[0]),
+  [Method.DND5E_APPLY_HEALING]: (params) =>
+    handleDnd5eApplyHealing(params as Parameters<typeof handleDnd5eApplyHealing>[0]),
+  [Method.DND5E_ROLL]: (params) =>
+    handleDnd5eRoll(params as Parameters<typeof handleDnd5eRoll>[0]),
+  [Method.DND5E_REST]: (params) =>
+    handleDnd5eRest(params as Parameters<typeof handleDnd5eRest>[0]),
+  [Method.DND5E_ACTOR_SUMMARY]: (params) =>
+    handleDnd5eActorSummary(params as Parameters<typeof handleDnd5eActorSummary>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

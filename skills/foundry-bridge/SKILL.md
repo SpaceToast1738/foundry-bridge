@@ -62,6 +62,9 @@ than hand-building from scratch. Then inspect/modify the world copy.
 `create_actor` / `grant_item` (compendium or inline) to build them; `toggle_condition` (+ `list_conditions`)
 for status effects; `get_roll_data` to feed `roll_dice`; `assign_actor` to give a player ownership;
 `apply_damage`/`apply_healing` for HP (system-dependent — falls back to `modify_document` if unsupported).
+On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed, respects resistances),
+`dnd5e_apply_healing` (+temp HP), `dnd5e_roll` (saves/checks/skills/death), `dnd5e_rest`,
+`dnd5e_actor_summary`. They error on non-5e worlds, so check `get_world`'s system first.
 
 ## Running the table
 - **Scenes/tokens:** `get_active_scene` for context; `activate_scene` to switch view; `place_token`

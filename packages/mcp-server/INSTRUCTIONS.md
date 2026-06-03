@@ -101,6 +101,23 @@ Actor-centric helpers (generic / capability-detected — no system-specific sche
 - `apply_damage` / `apply_healing { actor, amount }` — adjust HP via the system's `applyDamage()`. If the
   system doesn't provide it you'll get `UNAVAILABLE` — adjust the HP field with `modify_document` instead.
 
+## D&D 5e (system adapter)
+
+These `dnd5e_*` tools are **system-aware** and only work when the world runs the **dnd5e** system
+(otherwise they return `BAD_REQUEST`). On a 5e world, prefer these over the generic `apply_damage`
+because they respect damage types and traits:
+
+- `dnd5e_apply_damage { actor, amount, type?, multiplier? }` — typed damage respecting
+  resistances/immunities/vulnerabilities (`type`: e.g. `fire`, `slashing`; `multiplier`: `0.5` half,
+  `2` double).
+- `dnd5e_apply_healing { actor, amount, temp? }` — heal, or grant temporary HP (`temp: true`).
+- `dnd5e_roll { actor, kind, key? }` — `save`/`check` (`key` = ability, e.g. `"dex"`), `skill`
+  (`key` = skill code, e.g. `"ath"`), or `death` (no key). Returns the total.
+- `dnd5e_rest { actor, type }` — `short` or `long` rest (restores HP/resources).
+- `dnd5e_actor_summary { actor }` — compact HP / AC / abilities / level-or-CR readout from the sheet.
+
+On non-5e worlds, use the generic actor tools (`apply_damage`, `get_roll_data` + `roll_dice`, etc.).
+
 ## Embedded documents
 
 Some documents live *inside* a parent: JournalEntry **pages** (`JournalEntryPage`), Actor **items** and

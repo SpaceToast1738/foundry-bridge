@@ -679,6 +679,78 @@ export function buildToolDefinitions(): ToolDef[] {
     },
   });
 
+  // --- D&D 5e system adapter (only functional on a dnd5e world) ---
+  tools.push({
+    name: "dnd5e_apply_damage",
+    description:
+      "[D&D 5e] Apply typed damage to an actor, respecting resistances/immunities/vulnerabilities. `type` is a 5e damage type (e.g. fire, slashing); `multiplier` scales it. Only works on a dnd5e world.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        amount: { type: "number", description: "Damage amount (positive)." },
+        type: { type: "string", description: "5e damage type, e.g. \"fire\", \"slashing\". Omit for untyped." },
+        multiplier: { type: "number", description: "Scale (e.g. 0.5 for half, 2 for double). Default 1." },
+      },
+      required: ["actor", "amount"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_apply_healing",
+    description:
+      "[D&D 5e] Heal an actor, or grant temporary HP when `temp` is true. Only works on a dnd5e world.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        amount: { type: "number", description: "Amount (positive)." },
+        temp: { type: "boolean", description: "Grant temporary HP instead of healing." },
+      },
+      required: ["actor", "amount"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_roll",
+    description:
+      "[D&D 5e] Roll for an actor: kind \"save\"/\"check\" (key = ability, e.g. \"dex\"), \"skill\" (key = skill, e.g. \"ath\"), or \"death\" (no key). Returns the total. Only works on a dnd5e world.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        kind: { type: "string", enum: ["save", "check", "skill", "death"] },
+        key: { type: "string", description: "Ability (str/dex/…) or skill code (ath/acr/…). Not needed for death saves." },
+      },
+      required: ["actor", "kind"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_rest",
+    description:
+      "[D&D 5e] Take a short or long rest for an actor (restores HP/resources). Only works on a dnd5e world.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        type: { type: "string", enum: ["short", "long"] },
+      },
+      required: ["actor", "type"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_actor_summary",
+    description:
+      "[D&D 5e] Compact sheet readout for an actor: HP (value/max/temp), AC, abilities (value+mod), level/CR. Only works on a dnd5e world.",
+    inputSchema: {
+      type: "object",
+      properties: { actor: docRefSchema },
+      required: ["actor"],
+    },
+  });
+
   tools.push({
     name: "show_credentials",
     description:
@@ -750,6 +822,16 @@ export async function dispatchTool(
       return ctx.relay.call(Method.ACTOR_APPLY_DAMAGE, params);
     case "apply_healing":
       return ctx.relay.call(Method.ACTOR_APPLY_HEALING, params);
+    case "dnd5e_apply_damage":
+      return ctx.relay.call(Method.DND5E_APPLY_DAMAGE, params);
+    case "dnd5e_apply_healing":
+      return ctx.relay.call(Method.DND5E_APPLY_HEALING, params);
+    case "dnd5e_roll":
+      return ctx.relay.call(Method.DND5E_ROLL, params);
+    case "dnd5e_rest":
+      return ctx.relay.call(Method.DND5E_REST, params);
+    case "dnd5e_actor_summary":
+      return ctx.relay.call(Method.DND5E_ACTOR_SUMMARY, params);
     case "post_chat_message":
       return ctx.relay.call(Method.MESSAGES_CREATE, params);
     case "get_active_scene":

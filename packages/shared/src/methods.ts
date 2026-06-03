@@ -38,6 +38,11 @@ export const Method = {
   ACTOR_ASSIGN: "actor.assign",
   ACTOR_APPLY_DAMAGE: "actor.apply_damage",
   ACTOR_APPLY_HEALING: "actor.apply_healing",
+  DND5E_APPLY_DAMAGE: "dnd5e.apply_damage",
+  DND5E_APPLY_HEALING: "dnd5e.apply_healing",
+  DND5E_ROLL: "dnd5e.roll",
+  DND5E_REST: "dnd5e.rest",
+  DND5E_ACTOR_SUMMARY: "dnd5e.actor_summary",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -80,6 +85,11 @@ export const methodSchema = z.enum([
   Method.ACTOR_ASSIGN,
   Method.ACTOR_APPLY_DAMAGE,
   Method.ACTOR_APPLY_HEALING,
+  Method.DND5E_APPLY_DAMAGE,
+  Method.DND5E_APPLY_HEALING,
+  Method.DND5E_ROLL,
+  Method.DND5E_REST,
+  Method.DND5E_ACTOR_SUMMARY,
 ]);
 
 export const PermissionTier = {
@@ -126,6 +136,11 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.ACTOR_ASSIGN]: PermissionTier.WRITE,
   [Method.ACTOR_APPLY_DAMAGE]: PermissionTier.WRITE,
   [Method.ACTOR_APPLY_HEALING]: PermissionTier.WRITE,
+  [Method.DND5E_APPLY_DAMAGE]: PermissionTier.WRITE,
+  [Method.DND5E_APPLY_HEALING]: PermissionTier.WRITE,
+  [Method.DND5E_ROLL]: PermissionTier.WRITE,
+  [Method.DND5E_REST]: PermissionTier.WRITE,
+  [Method.DND5E_ACTOR_SUMMARY]: PermissionTier.READ,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
@@ -302,6 +317,27 @@ export const paramSchemas = {
     actor: docRefSchema,
     amount: z.number(),
   }),
+  [Method.DND5E_APPLY_DAMAGE]: z.object({
+    actor: docRefSchema,
+    amount: z.number(),
+    type: z.string().min(1).optional(),
+    multiplier: z.number().optional(),
+  }),
+  [Method.DND5E_APPLY_HEALING]: z.object({
+    actor: docRefSchema,
+    amount: z.number(),
+    temp: z.boolean().optional(),
+  }),
+  [Method.DND5E_ROLL]: z.object({
+    actor: docRefSchema,
+    kind: z.enum(["save", "check", "skill", "death"]),
+    key: z.string().min(1).optional(),
+  }),
+  [Method.DND5E_REST]: z.object({
+    actor: docRefSchema,
+    type: z.enum(["short", "long"]),
+  }),
+  [Method.DND5E_ACTOR_SUMMARY]: z.object({ actor: docRefSchema }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 
 export type ParamsFor<M extends Method> = z.infer<(typeof paramSchemas)[M]>;
