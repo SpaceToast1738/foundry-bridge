@@ -59,6 +59,8 @@ than hand-building from scratch. Then inspect/modify the world copy.
   (actor + x/y, defaults to the active scene) to drop a token; `update_token` to move/hide it.
 - **Dice/tables:** `roll_dice` evaluates a formula; `draw_table` pulls a random result. Neither posts
   to chat — announce the outcome with `post_chat_message` if the table should see it.
+- **Combat:** `start_combat` → `add_combatants` (token ids) → `roll_initiative` → `advance_combat`
+  (`next`/`end`). All return the current round/turn/initiative state.
 
 ## Speaking in-game
 To say something in the Foundry chat, use `post_chat_message`. Default to `whisper: "gm"` (GM-only)

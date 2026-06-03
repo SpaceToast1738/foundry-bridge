@@ -65,6 +65,7 @@ export interface FakeGameOptions {
   combats?: FakeDoc[];
   packs?: unknown[];
   activeSceneId?: string;
+  combat?: unknown;
   settings?: Record<string, unknown>;
   /** Skip installing default Document classes (Actor, Item, etc.) on globalThis. */
   skipDocumentClasses?: boolean;
@@ -156,6 +157,7 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
     macros: makeCollection(stores.Macro),
     cards: makeCollection(stores.Cards),
     combats: makeCollection(combatsStore),
+    combat: opts.combat,
     packs: {
       contents: packsStore,
       get(id: string) {

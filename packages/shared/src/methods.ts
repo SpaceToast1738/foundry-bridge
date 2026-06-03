@@ -24,6 +24,10 @@ export const Method = {
   TOKEN_UPDATE: "token.update",
   DICE_ROLL: "dice.roll",
   TABLE_DRAW: "table.draw",
+  COMBAT_CREATE: "combat.create",
+  COMBAT_ADD: "combat.add",
+  COMBAT_ROLL_INITIATIVE: "combat.roll_initiative",
+  COMBAT_ADVANCE: "combat.advance",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -52,6 +56,10 @@ export const methodSchema = z.enum([
   Method.TOKEN_UPDATE,
   Method.DICE_ROLL,
   Method.TABLE_DRAW,
+  Method.COMBAT_CREATE,
+  Method.COMBAT_ADD,
+  Method.COMBAT_ROLL_INITIATIVE,
+  Method.COMBAT_ADVANCE,
 ]);
 
 export const PermissionTier = {
@@ -84,6 +92,10 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.TOKEN_UPDATE]: PermissionTier.WRITE,
   [Method.DICE_ROLL]: PermissionTier.READ,
   [Method.TABLE_DRAW]: PermissionTier.READ,
+  [Method.COMBAT_CREATE]: PermissionTier.WRITE,
+  [Method.COMBAT_ADD]: PermissionTier.WRITE,
+  [Method.COMBAT_ROLL_INITIATIVE]: PermissionTier.WRITE,
+  [Method.COMBAT_ADVANCE]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
@@ -201,6 +213,21 @@ export const paramSchemas = {
   [Method.TABLE_DRAW]: z.object({
     ref: docRefSchema,
     formula: z.string().min(1).optional(),
+  }),
+  [Method.COMBAT_CREATE]: z.object({ scene: docRefSchema.optional() }),
+  [Method.COMBAT_ADD]: z.object({
+    combat: docRefSchema.optional(),
+    tokens: z.array(z.string().min(1)).min(1),
+  }),
+  [Method.COMBAT_ROLL_INITIATIVE]: z.object({
+    combat: docRefSchema.optional(),
+    combatants: z
+      .union([z.literal("all"), z.array(z.string().min(1)).min(1)])
+      .optional(),
+  }),
+  [Method.COMBAT_ADVANCE]: z.object({
+    combat: docRefSchema.optional(),
+    action: z.enum(["start", "next", "previous", "end"]),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

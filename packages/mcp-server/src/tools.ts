@@ -371,6 +371,69 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "start_combat",
+    description:
+      "Create a combat encounter on a scene (defaults to the active scene) and make it the active combat. Returns the combat state.",
+    inputSchema: {
+      type: "object",
+      properties: { scene: docRefSchema },
+      required: [],
+    },
+  });
+
+  tools.push({
+    name: "add_combatants",
+    description:
+      "Add combatants to a combat from token _ids on its scene. Defaults to the active combat. (Place tokens first with place_token.)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        combat: docRefSchema,
+        tokens: {
+          type: "array",
+          items: { type: "string" },
+          description: "Token _ids to add as combatants.",
+        },
+      },
+      required: ["tokens"],
+    },
+  });
+
+  tools.push({
+    name: "roll_initiative",
+    description:
+      "Roll initiative in a combat. Defaults to the active combat and all combatants; pass `combatants` (array of combatant _ids) to roll a subset.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        combat: docRefSchema,
+        combatants: {
+          description: "\"all\" (default) or an array of combatant _ids.",
+        },
+      },
+      required: [],
+    },
+  });
+
+  tools.push({
+    name: "advance_combat",
+    description:
+      "Advance a combat: action \"start\" (begin), \"next\" (next turn), \"previous\" (prior turn), or \"end\" (end the encounter — removes the combat). Defaults to the active combat.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        combat: docRefSchema,
+        action: {
+          type: "string",
+          enum: ["start", "next", "previous", "end"],
+          description: "What to do.",
+        },
+      },
+      required: ["action"],
+    },
+  });
+
+  tools.push({
     name: "roll_dice",
     description:
       "Evaluate a Foundry dice formula (e.g. \"2d6+3\", \"1d20+@abilities.dex.mod\"). Returns the total, the rolled result string, and per-die results. Does not post to chat — follow with post_chat_message to announce it.",
@@ -538,6 +601,14 @@ export async function dispatchTool(
       return ctx.relay.call(Method.TOKEN_PLACE, params);
     case "update_token":
       return ctx.relay.call(Method.TOKEN_UPDATE, params);
+    case "start_combat":
+      return ctx.relay.call(Method.COMBAT_CREATE, params);
+    case "add_combatants":
+      return ctx.relay.call(Method.COMBAT_ADD, params);
+    case "roll_initiative":
+      return ctx.relay.call(Method.COMBAT_ROLL_INITIATIVE, params);
+    case "advance_combat":
+      return ctx.relay.call(Method.COMBAT_ADVANCE, params);
     case "roll_dice":
       return ctx.relay.call(Method.DICE_ROLL, params);
     case "draw_table": {

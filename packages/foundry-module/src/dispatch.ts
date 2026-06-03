@@ -39,6 +39,12 @@ import {
   handleTokenUpdate,
 } from "./handlers/scenes.js";
 import { handleDiceRoll, handleTableDraw } from "./handlers/dice.js";
+import {
+  handleCombatAdd,
+  handleCombatAdvance,
+  handleCombatCreate,
+  handleCombatRollInitiative,
+} from "./handlers/combat.js";
 
 export type Handler = (
   params: unknown,
@@ -99,6 +105,16 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleDiceRoll(params as Parameters<typeof handleDiceRoll>[0]),
   [Method.TABLE_DRAW]: (params) =>
     handleTableDraw(params as Parameters<typeof handleTableDraw>[0]),
+  [Method.COMBAT_CREATE]: (params) =>
+    handleCombatCreate(params as Parameters<typeof handleCombatCreate>[0]),
+  [Method.COMBAT_ADD]: (params) =>
+    handleCombatAdd(params as Parameters<typeof handleCombatAdd>[0]),
+  [Method.COMBAT_ROLL_INITIATIVE]: (params) =>
+    handleCombatRollInitiative(
+      params as Parameters<typeof handleCombatRollInitiative>[0],
+    ),
+  [Method.COMBAT_ADVANCE]: (params) =>
+    handleCombatAdvance(params as Parameters<typeof handleCombatAdvance>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

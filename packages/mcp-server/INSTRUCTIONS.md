@@ -144,6 +144,18 @@ Coordinates are scene pixels. Use `get_active_scene` for the scene's dimensions 
 
 Both are read-only (no side effects). To announce a roll or draw, pass the result to `post_chat_message`.
 
+## Combat
+
+- `start_combat { scene? }` — create and activate a combat encounter (defaults to the active scene).
+- `add_combatants { tokens, combat? }` — add token `_id`s as combatants (place tokens first with
+  `place_token`); defaults to the active combat.
+- `roll_initiative { combat?, combatants? }` — roll for `"all"` (default) or an array of combatant `_id`s.
+- `advance_combat { action, combat? }` — `"start"` | `"next"` | `"previous"` | `"end"` (end removes the
+  encounter).
+
+All return combat state: `{ round, turn, combatants:[{ name, initiative, tokenId }] }`. Typical flow:
+`start_combat` → `place_token`/`add_combatants` → `roll_initiative` → `advance_combat "start"` → `"next"` …
+
 ## Errors
 
 - `FORBIDDEN` — permission tier, GM gate, or bulk limit.
