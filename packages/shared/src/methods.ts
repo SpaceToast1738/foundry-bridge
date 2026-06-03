@@ -30,6 +30,14 @@ export const Method = {
   COMBAT_ADVANCE: "combat.advance",
   FILES_BROWSE: "files.browse",
   FILES_UPLOAD: "files.upload",
+  ACTOR_CREATE: "actor.create",
+  ACTOR_GRANT_ITEM: "actor.grant_item",
+  CONDITIONS_LIST: "conditions.list",
+  ACTOR_TOGGLE_CONDITION: "actor.toggle_condition",
+  ACTOR_ROLL_DATA: "actor.roll_data",
+  ACTOR_ASSIGN: "actor.assign",
+  ACTOR_APPLY_DAMAGE: "actor.apply_damage",
+  ACTOR_APPLY_HEALING: "actor.apply_healing",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -64,6 +72,14 @@ export const methodSchema = z.enum([
   Method.COMBAT_ADVANCE,
   Method.FILES_BROWSE,
   Method.FILES_UPLOAD,
+  Method.ACTOR_CREATE,
+  Method.ACTOR_GRANT_ITEM,
+  Method.CONDITIONS_LIST,
+  Method.ACTOR_TOGGLE_CONDITION,
+  Method.ACTOR_ROLL_DATA,
+  Method.ACTOR_ASSIGN,
+  Method.ACTOR_APPLY_DAMAGE,
+  Method.ACTOR_APPLY_HEALING,
 ]);
 
 export const PermissionTier = {
@@ -102,6 +118,14 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.COMBAT_ADVANCE]: PermissionTier.WRITE,
   [Method.FILES_BROWSE]: PermissionTier.READ,
   [Method.FILES_UPLOAD]: PermissionTier.WRITE,
+  [Method.ACTOR_CREATE]: PermissionTier.WRITE,
+  [Method.ACTOR_GRANT_ITEM]: PermissionTier.WRITE,
+  [Method.CONDITIONS_LIST]: PermissionTier.READ,
+  [Method.ACTOR_TOGGLE_CONDITION]: PermissionTier.WRITE,
+  [Method.ACTOR_ROLL_DATA]: PermissionTier.READ,
+  [Method.ACTOR_ASSIGN]: PermissionTier.WRITE,
+  [Method.ACTOR_APPLY_DAMAGE]: PermissionTier.WRITE,
+  [Method.ACTOR_APPLY_HEALING]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
@@ -245,6 +269,38 @@ export const paramSchemas = {
     filename: z.string().min(1),
     data_base64: z.string().min(1),
     source: z.string().min(1).optional(),
+  }),
+  [Method.ACTOR_CREATE]: z.object({
+    name: z.string().min(1),
+    type: z.string().min(1).optional(),
+    folder: z.string().min(1).optional(),
+    data: z.record(z.string(), z.unknown()).optional(),
+  }),
+  [Method.ACTOR_GRANT_ITEM]: z.object({
+    actor: docRefSchema,
+    pack: z.string().min(1).optional(),
+    entry: docRefSchema.optional(),
+    item: z.record(z.string(), z.unknown()).optional(),
+  }),
+  [Method.CONDITIONS_LIST]: z.object({}).optional(),
+  [Method.ACTOR_TOGGLE_CONDITION]: z.object({
+    actor: docRefSchema,
+    condition: z.string().min(1),
+    active: z.boolean().optional(),
+  }),
+  [Method.ACTOR_ROLL_DATA]: z.object({ actor: docRefSchema }),
+  [Method.ACTOR_ASSIGN]: z.object({
+    actor: docRefSchema,
+    user: docRefSchema,
+    level: z.number().int().min(0).max(3).optional(),
+  }),
+  [Method.ACTOR_APPLY_DAMAGE]: z.object({
+    actor: docRefSchema,
+    amount: z.number(),
+  }),
+  [Method.ACTOR_APPLY_HEALING]: z.object({
+    actor: docRefSchema,
+    amount: z.number(),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

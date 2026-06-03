@@ -572,6 +572,114 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "create_actor",
+    description:
+      "Create an actor (character/NPC/monster). Convenience over create_document. Inspect an existing actor of the same type first for the system schema.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Actor name." },
+        type: { type: "string", description: "Actor subtype for the game system (e.g. \"npc\", \"character\")." },
+        folder: { type: "string", description: "Optional folder _id." },
+        data: { type: "object", additionalProperties: true, description: "Optional extra fields (e.g. system data)." },
+      },
+      required: ["name"],
+    },
+  });
+
+  tools.push({
+    name: "grant_item",
+    description:
+      "Add an item to an actor — either imported from a compendium (pack + entry) or from inline data (item). Provide exactly one source.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        pack: { type: "string", description: "Compendium pack id (with `entry`)." },
+        entry: docRefSchema,
+        item: { type: "object", additionalProperties: true, description: "Inline item data (with at least a name)." },
+      },
+      required: ["actor"],
+    },
+  });
+
+  tools.push({
+    name: "list_conditions",
+    description:
+      "List the status conditions available in this world (id, name, img) from the system's status effects.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  });
+
+  tools.push({
+    name: "toggle_condition",
+    description:
+      "Toggle a status condition on an actor (e.g. \"prone\", \"poisoned\"). Pass `active` to force on/off, or omit to flip. Use list_conditions for valid ids.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        condition: { type: "string", description: "Condition id (see list_conditions)." },
+        active: { type: "boolean", description: "Force on (true) / off (false); omit to toggle." },
+      },
+      required: ["actor", "condition"],
+    },
+  });
+
+  tools.push({
+    name: "get_roll_data",
+    description:
+      "Get an actor's roll data (the @-reference object), so roll_dice can use formulas like \"1d20+@abilities.dex.mod\".",
+    inputSchema: {
+      type: "object",
+      properties: { actor: docRefSchema },
+      required: ["actor"],
+    },
+  });
+
+  tools.push({
+    name: "assign_actor",
+    description:
+      "Set a user's ownership of an actor (e.g. give a player control of their PC). level: 0 none, 1 limited, 2 observer, 3 owner (default 3).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        user: docRefSchema,
+        level: { type: "integer", description: "Ownership level 0-3 (default 3 = owner)." },
+      },
+      required: ["actor", "user"],
+    },
+  });
+
+  tools.push({
+    name: "apply_damage",
+    description:
+      "Apply damage to an actor (reduces HP). System-dependent: uses the actor's applyDamage(); if unsupported, adjust HP with modify_document instead.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        amount: { type: "number", description: "Damage amount (positive)." },
+      },
+      required: ["actor", "amount"],
+    },
+  });
+
+  tools.push({
+    name: "apply_healing",
+    description:
+      "Heal an actor (restores HP). System-dependent: uses the actor's applyDamage() with a negative amount; if unsupported, adjust HP with modify_document instead.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        amount: { type: "number", description: "Healing amount (positive)." },
+      },
+      required: ["actor", "amount"],
+    },
+  });
+
+  tools.push({
     name: "show_credentials",
     description:
       "List the Foundry credentials this bridge is configured with. Passwords are never returned.",
@@ -626,6 +734,22 @@ export async function dispatchTool(
       return ctx.relay.call(Method.FILES_BROWSE, params);
     case "upload_image":
       return ctx.relay.call(Method.FILES_UPLOAD, params);
+    case "create_actor":
+      return ctx.relay.call(Method.ACTOR_CREATE, params);
+    case "grant_item":
+      return ctx.relay.call(Method.ACTOR_GRANT_ITEM, params);
+    case "list_conditions":
+      return ctx.relay.call(Method.CONDITIONS_LIST, params);
+    case "toggle_condition":
+      return ctx.relay.call(Method.ACTOR_TOGGLE_CONDITION, params);
+    case "get_roll_data":
+      return ctx.relay.call(Method.ACTOR_ROLL_DATA, params);
+    case "assign_actor":
+      return ctx.relay.call(Method.ACTOR_ASSIGN, params);
+    case "apply_damage":
+      return ctx.relay.call(Method.ACTOR_APPLY_DAMAGE, params);
+    case "apply_healing":
+      return ctx.relay.call(Method.ACTOR_APPLY_HEALING, params);
     case "post_chat_message":
       return ctx.relay.call(Method.MESSAGES_CREATE, params);
     case "get_active_scene":

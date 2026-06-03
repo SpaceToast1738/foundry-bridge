@@ -85,6 +85,22 @@ entries, but those depend on a **module's stylesheet** (not core), so don't intr
 styling of your own. World-specific conventions belong in that world's GM-authored `AGENTS` journal —
 read it; don't invent your own.
 
+## Actors
+
+Actor-centric helpers (generic / capability-detected — no system-specific schema baked in):
+
+- `create_actor { name, type?, folder?, data? }` — convenience over `create_document` for `Actor`.
+- `grant_item { actor, (pack + entry) | item }` — add an item to an actor, imported from a compendium
+  or from inline data. (Remove with `delete_embedded` `Item`; edit with `update_embedded`.)
+- `list_conditions` — the world's status conditions (ids). `toggle_condition { actor, condition, active? }`
+  toggles one (e.g. `"prone"`, `"poisoned"`); omit `active` to flip.
+- `get_roll_data { actor }` — the `@`-reference object; feed into `roll_dice` `data` for
+  `"1d20+@abilities.dex.mod"`.
+- `assign_actor { actor, user, level? }` — set a user's ownership of an actor (give a player their PC).
+  `level`: 0 none, 1 limited, 2 observer, 3 owner (default 3).
+- `apply_damage` / `apply_healing { actor, amount }` — adjust HP via the system's `applyDamage()`. If the
+  system doesn't provide it you'll get `UNAVAILABLE` — adjust the HP field with `modify_document` instead.
+
 ## Embedded documents
 
 Some documents live *inside* a parent: JournalEntry **pages** (`JournalEntryPage`), Actor **items** and

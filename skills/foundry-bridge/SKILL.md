@@ -58,6 +58,11 @@ than hand-building from scratch. Then inspect/modify the world copy.
    `folder: null` moves to the root.
 4. Verify with a follow-up `get_*` filtered by `where: {"folder": "<id>"}`.
 
+## Actors
+`create_actor` / `grant_item` (compendium or inline) to build them; `toggle_condition` (+ `list_conditions`)
+for status effects; `get_roll_data` to feed `roll_dice`; `assign_actor` to give a player ownership;
+`apply_damage`/`apply_healing` for HP (system-dependent — falls back to `modify_document` if unsupported).
+
 ## Running the table
 - **Scenes/tokens:** `get_active_scene` for context; `activate_scene` to switch view; `place_token`
   (actor + x/y, defaults to the active scene) to drop a token; `update_token` to move/hide it.

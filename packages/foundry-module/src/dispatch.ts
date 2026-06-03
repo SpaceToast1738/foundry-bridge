@@ -46,6 +46,16 @@ import {
   handleCombatRollInitiative,
 } from "./handlers/combat.js";
 import { handleFilesBrowse, handleFilesUpload } from "./handlers/files.js";
+import {
+  handleActorApplyDamage,
+  handleActorApplyHealing,
+  handleActorAssign,
+  handleActorCreate,
+  handleActorGrantItem,
+  handleActorRollData,
+  handleActorToggleCondition,
+  handleConditionsList,
+} from "./handlers/actors.js";
 
 export type Handler = (
   params: unknown,
@@ -120,6 +130,23 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleFilesBrowse(params as Parameters<typeof handleFilesBrowse>[0]),
   [Method.FILES_UPLOAD]: (params) =>
     handleFilesUpload(params as Parameters<typeof handleFilesUpload>[0]),
+  [Method.ACTOR_CREATE]: (params) =>
+    handleActorCreate(params as Parameters<typeof handleActorCreate>[0]),
+  [Method.ACTOR_GRANT_ITEM]: (params) =>
+    handleActorGrantItem(params as Parameters<typeof handleActorGrantItem>[0]),
+  [Method.CONDITIONS_LIST]: () => handleConditionsList(),
+  [Method.ACTOR_TOGGLE_CONDITION]: (params) =>
+    handleActorToggleCondition(
+      params as Parameters<typeof handleActorToggleCondition>[0],
+    ),
+  [Method.ACTOR_ROLL_DATA]: (params) =>
+    handleActorRollData(params as Parameters<typeof handleActorRollData>[0]),
+  [Method.ACTOR_ASSIGN]: (params) =>
+    handleActorAssign(params as Parameters<typeof handleActorAssign>[0]),
+  [Method.ACTOR_APPLY_DAMAGE]: (params) =>
+    handleActorApplyDamage(params as Parameters<typeof handleActorApplyDamage>[0]),
+  [Method.ACTOR_APPLY_HEALING]: (params) =>
+    handleActorApplyHealing(params as Parameters<typeof handleActorApplyHealing>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {
