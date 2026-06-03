@@ -317,6 +317,60 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "get_active_scene",
+    description:
+      "Get the currently active/viewed scene (id, name, dimensions, token count).",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  });
+
+  tools.push({
+    name: "activate_scene",
+    description: "Make a scene the active one (what players view). Reference it by _id or name.",
+    inputSchema: {
+      type: "object",
+      properties: { ref: docRefSchema },
+      required: ["ref"],
+    },
+  });
+
+  tools.push({
+    name: "place_token",
+    description:
+      "Place a token for an actor on a scene at (x, y) pixel coordinates, using the actor's prototype token. Defaults to the active scene.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene: docRefSchema,
+        actor: docRefSchema,
+        x: { type: "number", description: "X pixel coordinate on the scene." },
+        y: { type: "number", description: "Y pixel coordinate on the scene." },
+        hidden: { type: "boolean", description: "Place hidden from players." },
+        name: { type: "string", description: "Override the token name." },
+      },
+      required: ["actor", "x", "y"],
+    },
+  });
+
+  tools.push({
+    name: "update_token",
+    description:
+      "Update a token on a scene by its _id — move it (x/y), hide/reveal (hidden), rename, etc. Defaults to the active scene. Delete a token with delete_embedded (embedded: \"Token\").",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene: docRefSchema,
+        token_id: { type: "string", description: "The token's _id on the scene." },
+        updates: {
+          type: "object",
+          additionalProperties: true,
+          description: "Fields to update (e.g. { x, y, hidden }).",
+        },
+      },
+      required: ["token_id", "updates"],
+    },
+  });
+
+  tools.push({
     name: "list_compendiums",
     description:
       "List the compendium packs available in the world (id, label, document type, system). Optionally filter by document type (e.g. Actor, Item).",
@@ -444,6 +498,14 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMPENDIUM_IMPORT, params);
     case "post_chat_message":
       return ctx.relay.call(Method.MESSAGES_CREATE, params);
+    case "get_active_scene":
+      return ctx.relay.call(Method.SCENE_ACTIVE, params);
+    case "activate_scene":
+      return ctx.relay.call(Method.SCENE_ACTIVATE, params);
+    case "place_token":
+      return ctx.relay.call(Method.TOKEN_PLACE, params);
+    case "update_token":
+      return ctx.relay.call(Method.TOKEN_UPDATE, params);
     case "show_credentials":
       return getCredentialsInfo(ctx.credentials, ctx.activeIndex);
   }

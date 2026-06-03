@@ -18,6 +18,10 @@ export const Method = {
   FOLDERS_CREATE: "folders.create",
   FOLDERS_MOVE: "folders.move",
   MESSAGES_CREATE: "messages.create",
+  SCENE_ACTIVE: "scene.active",
+  SCENE_ACTIVATE: "scene.activate",
+  TOKEN_PLACE: "token.place",
+  TOKEN_UPDATE: "token.update",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -40,6 +44,10 @@ export const methodSchema = z.enum([
   Method.FOLDERS_CREATE,
   Method.FOLDERS_MOVE,
   Method.MESSAGES_CREATE,
+  Method.SCENE_ACTIVE,
+  Method.SCENE_ACTIVATE,
+  Method.TOKEN_PLACE,
+  Method.TOKEN_UPDATE,
 ]);
 
 export const PermissionTier = {
@@ -66,6 +74,10 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.COMPENDIUM_SEARCH]: PermissionTier.READ,
   [Method.COMPENDIUM_IMPORT]: PermissionTier.WRITE,
   [Method.MESSAGES_CREATE]: PermissionTier.WRITE,
+  [Method.SCENE_ACTIVE]: PermissionTier.READ,
+  [Method.SCENE_ACTIVATE]: PermissionTier.WRITE,
+  [Method.TOKEN_PLACE]: PermissionTier.WRITE,
+  [Method.TOKEN_UPDATE]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
@@ -160,6 +172,21 @@ export const paramSchemas = {
     whisper: z.union([z.literal("gm"), z.array(docRefSchema)]).optional(),
     blind: z.boolean().optional(),
     speaker_alias: z.string().min(1).optional(),
+  }),
+  [Method.SCENE_ACTIVE]: z.object({}).optional(),
+  [Method.SCENE_ACTIVATE]: z.object({ ref: docRefSchema }),
+  [Method.TOKEN_PLACE]: z.object({
+    scene: docRefSchema.optional(),
+    actor: docRefSchema,
+    x: z.number(),
+    y: z.number(),
+    hidden: z.boolean().optional(),
+    name: z.string().min(1).optional(),
+  }),
+  [Method.TOKEN_UPDATE]: z.object({
+    scene: docRefSchema.optional(),
+    token_id: z.string().min(1),
+    updates: z.record(z.string(), z.unknown()),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

@@ -32,6 +32,12 @@ import {
   handleFoldersMove,
 } from "./handlers/folders.js";
 import { handleMessagesCreate } from "./handlers/messages.js";
+import {
+  handleSceneActivate,
+  handleSceneActive,
+  handleTokenPlace,
+  handleTokenUpdate,
+} from "./handlers/scenes.js";
 
 export type Handler = (
   params: unknown,
@@ -81,6 +87,13 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleFoldersMove(params as Parameters<typeof handleFoldersMove>[0]),
   [Method.MESSAGES_CREATE]: (params) =>
     handleMessagesCreate(params as Parameters<typeof handleMessagesCreate>[0]),
+  [Method.SCENE_ACTIVE]: () => handleSceneActive(),
+  [Method.SCENE_ACTIVATE]: (params) =>
+    handleSceneActivate(params as Parameters<typeof handleSceneActivate>[0]),
+  [Method.TOKEN_PLACE]: (params) =>
+    handleTokenPlace(params as Parameters<typeof handleTokenPlace>[0]),
+  [Method.TOKEN_UPDATE]: (params) =>
+    handleTokenUpdate(params as Parameters<typeof handleTokenUpdate>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

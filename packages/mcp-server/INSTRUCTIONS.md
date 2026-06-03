@@ -124,6 +124,17 @@ Prefer importing system content over hand-building it. Import first, then inspec
   private. `speaker_alias` sets the displayed speaker name. Use sparingly — public messages appear live
   in players' chat; prefer a GM whisper unless asked to address the table.
 
+## Scenes & tokens
+
+- `get_active_scene` — the scene players are currently viewing (id, name, dimensions, token count).
+- `activate_scene { ref }` — make a scene the active/viewed one.
+- `place_token { actor, x, y, scene?, hidden?, name? }` — drop a token for an actor at pixel `(x, y)`
+  on a scene (defaults to the active scene), built from the actor's prototype token.
+- `update_token { token_id, updates, scene? }` — move (`{x, y}`), hide (`{hidden:true}`), rename, etc.
+  Delete a token with `delete_embedded` (`embedded: "Token"`, parent = the Scene).
+
+Coordinates are scene pixels. Use `get_active_scene` for the scene's dimensions before placing.
+
 ## Errors
 
 - `FORBIDDEN` — permission tier, GM gate, or bulk limit.

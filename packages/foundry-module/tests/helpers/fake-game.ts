@@ -64,6 +64,7 @@ export interface FakeGameOptions {
   cards?: FakeDoc[];
   combats?: FakeDoc[];
   packs?: unknown[];
+  activeSceneId?: string;
   settings?: Record<string, unknown>;
   /** Skip installing default Document classes (Actor, Item, etc.) on globalThis. */
   skipDocumentClasses?: boolean;
@@ -128,6 +129,11 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
   };
   const combatsStore = opts.combats ?? [];
   const packsStore = opts.packs ?? [];
+  const scenesCol = makeCollection(stores.Scene) as FakeCollection & {
+    active?: FakeDoc;
+  };
+  scenesCol.active =
+    stores.Scene.find((s) => s._id === opts.activeSceneId) ?? stores.Scene[0];
   const prior = {
     game: (globalThis as { game?: unknown }).game,
     ui: (globalThis as { ui?: unknown }).ui,
@@ -143,7 +149,7 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
     items: makeCollection(stores.Item),
     journal: makeCollection(stores.JournalEntry),
     folders: makeCollection(stores.Folder),
-    scenes: makeCollection(stores.Scene),
+    scenes: scenesCol,
     users: makeCollection(stores.User),
     tables: makeCollection(stores.RollTable),
     playlists: makeCollection(stores.Playlist),

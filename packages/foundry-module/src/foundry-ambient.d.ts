@@ -37,7 +37,11 @@ declare global {
     readonly items?: { contents: unknown[]; get(id: string): unknown };
     readonly journal?: { contents: unknown[]; get(id: string): unknown };
     readonly folders?: { contents: unknown[]; get(id: string): unknown };
-    readonly scenes?: { contents: unknown[]; get(id: string): unknown };
+    readonly scenes?: {
+      contents: unknown[];
+      get(id: string): unknown;
+      active?: unknown;
+    };
     readonly tables?: { contents: unknown[]; get(id: string): unknown };
     readonly playlists?: { contents: unknown[]; get(id: string): unknown };
     readonly macros?: { contents: unknown[]; get(id: string): unknown };

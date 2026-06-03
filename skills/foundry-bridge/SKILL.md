@@ -54,6 +54,10 @@ than hand-building from scratch. Then inspect/modify the world copy.
    `folder: null` moves to the root.
 4. Verify with a follow-up `get_*` filtered by `where: {"folder": "<id>"}`.
 
+## Running the table
+- **Scenes/tokens:** `get_active_scene` for context; `activate_scene` to switch view; `place_token`
+  (actor + x/y, defaults to the active scene) to drop a token; `update_token` to move/hide it.
+
 ## Speaking in-game
 To say something in the Foundry chat, use `post_chat_message`. Default to `whisper: "gm"` (GM-only)
 unless the user explicitly wants players to see it — public messages appear live in everyone's chat.
