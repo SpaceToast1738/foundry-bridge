@@ -63,6 +63,7 @@ export interface FakeGameOptions {
   macros?: FakeDoc[];
   cards?: FakeDoc[];
   combats?: FakeDoc[];
+  packs?: unknown[];
   settings?: Record<string, unknown>;
   /** Skip installing default Document classes (Actor, Item, etc.) on globalThis. */
   skipDocumentClasses?: boolean;
@@ -126,6 +127,7 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
     Cards: opts.cards ?? [],
   };
   const combatsStore = opts.combats ?? [];
+  const packsStore = opts.packs ?? [];
   const prior = {
     game: (globalThis as { game?: unknown }).game,
     ui: (globalThis as { ui?: unknown }).ui,
@@ -148,6 +150,14 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
     macros: makeCollection(stores.Macro),
     cards: makeCollection(stores.Cards),
     combats: makeCollection(combatsStore),
+    packs: {
+      contents: packsStore,
+      get(id: string) {
+        return packsStore.find(
+          (p) => (p as { metadata?: { id?: string } }).metadata?.id === id,
+        );
+      },
+    },
     settings: {
       register: () => undefined,
       get: (_ns: string, key: string) => settingsStore.get(key),

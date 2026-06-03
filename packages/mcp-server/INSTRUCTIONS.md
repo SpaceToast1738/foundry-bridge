@@ -99,6 +99,19 @@ Some documents live *inside* a parent: JournalEntry **pages** (`JournalEntryPage
 Prefer these over replacing a parent's whole `pages`/`items` array. Inspect the parent with `get_*`
 first to match the embedded document's schema.
 
+## Compendia (importing content)
+
+Compendium packs hold reusable content (monsters, spells, items, premade journals) that lives outside
+the world until imported.
+
+- `list_compendiums` — available packs (id like `dnd5e.monsters`, label, document type, system);
+  optional `type` filter.
+- `search_compendium { pack, query? }` — find entries by name; returns `_id`, `name`, `type`, `uuid`, `img`.
+- `import_from_compendium { pack, entries: [{ _id|name }], folder? }` — copy entries into the world as
+  real documents (optionally into a folder). Imported documents receive fresh `_id`s.
+
+Prefer importing system content over hand-building it. Import first, then inspect/modify the world copy.
+
 ## Folder filing
 
 - `create_folder({type, name, parent?})` creates a folder for documents of `type` (Actor / Item / JournalEntry / Scene). `parent` is an optional folder `_id` for nesting.

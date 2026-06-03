@@ -317,6 +317,59 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "list_compendiums",
+    description:
+      "List the compendium packs available in the world (id, label, document type, system). Optionally filter by document type (e.g. Actor, Item).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: {
+          type: "string",
+          description: "Optional document type filter (e.g. Actor, Item, JournalEntry).",
+        },
+      },
+      required: [],
+    },
+  });
+
+  tools.push({
+    name: "search_compendium",
+    description:
+      "Search a compendium pack's index by name (substring, case-insensitive). Returns lightweight entries (_id, name, type, uuid, img). Use list_compendiums first to get a pack id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pack: { type: "string", description: "Pack id, e.g. \"dnd5e.monsters\"." },
+        query: { type: "string", description: "Name substring to match. Omit to list the pack." },
+        type: { type: "string", description: "Optional entry subtype filter." },
+        limit: { type: "integer", description: "Max entries to return. Default 50." },
+      },
+      required: ["pack"],
+    },
+  });
+
+  tools.push({
+    name: "import_from_compendium",
+    description:
+      "Import one or more entries from a compendium pack into the world as real documents, optionally into a folder. Entries are referenced by _id or name (use search_compendium to find them).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pack: { type: "string", description: "Pack id, e.g. \"dnd5e.monsters\"." },
+        entries: {
+          type: "array",
+          items: docRefSchema,
+          description: "Entries to import, each referenced by _id or name.",
+        },
+        folder: {
+          description: "Optional destination folder: an _id string, or a {_id|name} reference.",
+        },
+      },
+      required: ["pack", "entries"],
+    },
+  });
+
+  tools.push({
     name: "show_credentials",
     description:
       "List the Foundry credentials this bridge is configured with. Passwords are never returned.",
@@ -361,6 +414,12 @@ export async function dispatchTool(
       return ctx.relay.call(Method.FOLDERS_CREATE, params);
     case "move_to_folder":
       return ctx.relay.call(Method.FOLDERS_MOVE, params);
+    case "list_compendiums":
+      return ctx.relay.call(Method.COMPENDIUM_LIST, params);
+    case "search_compendium":
+      return ctx.relay.call(Method.COMPENDIUM_SEARCH, params);
+    case "import_from_compendium":
+      return ctx.relay.call(Method.COMPENDIUM_IMPORT, params);
     case "show_credentials":
       return getCredentialsInfo(ctx.credentials, ctx.activeIndex);
   }

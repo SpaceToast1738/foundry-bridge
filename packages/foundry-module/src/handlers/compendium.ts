@@ -1,0 +1,149 @@
+import {
+  BridgeError,
+  ErrorCode,
+  Method,
+  type ParamsFor,
+} from "@foundry-bridge/shared";
+import {
+  docToObject,
+  findInCollection,
+  getCollection,
+  getDocumentClass,
+  isWritableDocumentType,
+} from "../collections.js";
+
+interface PackMetadata {
+  id?: string;
+  label?: string;
+  type?: string;
+  packageType?: string;
+  packageName?: string;
+  system?: string;
+}
+
+interface FoundryPack {
+  metadata: PackMetadata;
+  documentName: string;
+  getIndex(): Promise<{ contents: Record<string, unknown>[] }>;
+  getDocument(id: string): Promise<unknown>;
+}
+
+function allPacks(): FoundryPack[] {
+  const packs = game.packs as { contents?: unknown[] } | undefined;
+  return (packs?.contents ?? []) as FoundryPack[];
+}
+
+function getPack(packId: string): FoundryPack {
+  const packs = game.packs as { get(id: string): unknown } | undefined;
+  const pack = packs?.get(packId) as FoundryPack | undefined;
+  if (!pack) {
+    throw new BridgeError(ErrorCode.NOT_FOUND, `Compendium pack '${packId}' not found`);
+  }
+  return pack;
+}
+
+export function handleCompendiumList(
+  params: ParamsFor<typeof Method.COMPENDIUM_LIST>,
+): { count: number; packs: Record<string, unknown>[] } {
+  const typeFilter = params?.type;
+  const packs = allPacks()
+    .map((p) => ({
+      id: p.metadata?.id,
+      label: p.metadata?.label,
+      type: p.metadata?.type ?? p.documentName,
+      system: p.metadata?.system,
+      packageType: p.metadata?.packageType,
+    }))
+    .filter((p) => !typeFilter || p.type === typeFilter);
+  return { count: packs.length, packs };
+}
+
+export async function handleCompendiumSearch(
+  params: ParamsFor<typeof Method.COMPENDIUM_SEARCH>,
+): Promise<{ pack: string; count: number; entries: Record<string, unknown>[] }> {
+  const pack = getPack(params.pack);
+  const index = await pack.getIndex();
+  const needle = params.query?.toLowerCase();
+  const limit = params.limit ?? 50;
+  const entries: Record<string, unknown>[] = [];
+  for (const raw of index.contents) {
+    if (entries.length >= limit) break;
+    const name = typeof raw.name === "string" ? raw.name : "";
+    if (needle && !name.toLowerCase().includes(needle)) continue;
+    if (params.type && raw.type !== params.type) continue;
+    entries.push({
+      _id: raw._id,
+      name: raw.name,
+      type: raw.type,
+      uuid: raw.uuid,
+      img: raw.img,
+    });
+  }
+  return { pack: params.pack, count: entries.length, entries };
+}
+
+export async function handleCompendiumImport(
+  params: ParamsFor<typeof Method.COMPENDIUM_IMPORT>,
+): Promise<{ pack: string; count: number; documents: Record<string, unknown>[] }> {
+  const pack = getPack(params.pack);
+  const type = pack.documentName;
+  if (!isWritableDocumentType(type)) {
+    throw new BridgeError(
+      ErrorCode.BAD_REQUEST,
+      `Pack '${params.pack}' holds '${type}', which cannot be imported`,
+    );
+  }
+  const cls = getDocumentClass(type);
+  if (!cls) {
+    throw new BridgeError(
+      ErrorCode.UNAVAILABLE,
+      `Document class '${type}' is not loaded`,
+    );
+  }
+
+  // Resolve an optional destination folder _id.
+  let folderId: string | null = null;
+  if (params.folder !== undefined) {
+    if (typeof params.folder === "string") {
+      folderId = params.folder;
+    } else {
+      const folders = getCollection("folders");
+      const folderRaw = folders && findInCollection(folders, params.folder);
+      if (!folderRaw) {
+        throw new BridgeError(
+          ErrorCode.NOT_FOUND,
+          `Folder not found by ref ${JSON.stringify(params.folder)}`,
+        );
+      }
+      const id = docToObject(folderRaw)._id;
+      folderId = typeof id === "string" ? id : null;
+    }
+  }
+
+  const index = await pack.getIndex();
+  const sources: Record<string, unknown>[] = [];
+  for (const ref of params.entries) {
+    const wantId = ref._id ?? ref.id;
+    const entry = index.contents.find((e) =>
+      wantId ? e._id === wantId : e.name === ref.name,
+    );
+    if (!entry) {
+      throw new BridgeError(
+        ErrorCode.NOT_FOUND,
+        `Pack entry not found by ref ${JSON.stringify(ref)}`,
+      );
+    }
+    const doc = await pack.getDocument(entry._id as string);
+    const source = docToObject(doc);
+    delete source._id;
+    if (folderId !== null) source.folder = folderId;
+    sources.push(source);
+  }
+
+  const created = await cls.createDocuments(sources);
+  return {
+    pack: params.pack,
+    count: created.length,
+    documents: created.map(docToObject),
+  };
+}

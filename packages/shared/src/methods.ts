@@ -12,6 +12,9 @@ export const Method = {
   EMBEDDED_CREATE: "embedded.create",
   EMBEDDED_UPDATE: "embedded.update",
   EMBEDDED_DELETE: "embedded.delete",
+  COMPENDIUM_LIST: "compendium.list",
+  COMPENDIUM_SEARCH: "compendium.search",
+  COMPENDIUM_IMPORT: "compendium.import",
   FOLDERS_CREATE: "folders.create",
   FOLDERS_MOVE: "folders.move",
 } as const;
@@ -30,6 +33,9 @@ export const methodSchema = z.enum([
   Method.EMBEDDED_CREATE,
   Method.EMBEDDED_UPDATE,
   Method.EMBEDDED_DELETE,
+  Method.COMPENDIUM_LIST,
+  Method.COMPENDIUM_SEARCH,
+  Method.COMPENDIUM_IMPORT,
   Method.FOLDERS_CREATE,
   Method.FOLDERS_MOVE,
 ]);
@@ -54,6 +60,9 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.FOLDERS_MOVE]: PermissionTier.WRITE,
   [Method.EMBEDDED_CREATE]: PermissionTier.WRITE,
   [Method.EMBEDDED_UPDATE]: PermissionTier.WRITE,
+  [Method.COMPENDIUM_LIST]: PermissionTier.READ,
+  [Method.COMPENDIUM_SEARCH]: PermissionTier.READ,
+  [Method.COMPENDIUM_IMPORT]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
@@ -118,6 +127,20 @@ export const paramSchemas = {
     parent_id: z.string().min(1),
     embedded: z.string().min(1),
     ids: z.array(z.string().min(1)).min(1),
+  }),
+  [Method.COMPENDIUM_LIST]: z
+    .object({ type: z.string().min(1).optional() })
+    .optional(),
+  [Method.COMPENDIUM_SEARCH]: z.object({
+    pack: z.string().min(1),
+    query: z.string().optional(),
+    type: z.string().min(1).optional(),
+    limit: z.number().int().positive().optional(),
+  }),
+  [Method.COMPENDIUM_IMPORT]: z.object({
+    pack: z.string().min(1),
+    entries: z.array(docRefSchema).min(1),
+    folder: z.union([z.string().min(1), docRefSchema]).optional(),
   }),
   [Method.FOLDERS_CREATE]: z.object({
     type: z.string().min(1),

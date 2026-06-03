@@ -43,6 +43,7 @@ declare global {
     readonly macros?: { contents: unknown[]; get(id: string): unknown };
     readonly cards?: { contents: unknown[]; get(id: string): unknown };
     readonly combats?: { contents: unknown[]; get(id: string): unknown };
+    readonly packs?: { contents: unknown[]; get(id: string): unknown };
   }
 
   interface FoundryHooks {

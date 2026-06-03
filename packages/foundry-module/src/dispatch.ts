@@ -23,6 +23,11 @@ import {
   handleEmbeddedUpdate,
 } from "./handlers/embedded.js";
 import {
+  handleCompendiumImport,
+  handleCompendiumList,
+  handleCompendiumSearch,
+} from "./handlers/compendium.js";
+import {
   handleFoldersCreate,
   handleFoldersMove,
 } from "./handlers/folders.js";
@@ -58,6 +63,16 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleEmbeddedDelete(
       params as Parameters<typeof handleEmbeddedDelete>[0],
       state,
+    ),
+  [Method.COMPENDIUM_LIST]: (params) =>
+    handleCompendiumList(params as Parameters<typeof handleCompendiumList>[0]),
+  [Method.COMPENDIUM_SEARCH]: (params) =>
+    handleCompendiumSearch(
+      params as Parameters<typeof handleCompendiumSearch>[0],
+    ),
+  [Method.COMPENDIUM_IMPORT]: (params) =>
+    handleCompendiumImport(
+      params as Parameters<typeof handleCompendiumImport>[0],
     ),
   [Method.FOLDERS_CREATE]: (params) =>
     handleFoldersCreate(params as Parameters<typeof handleFoldersCreate>[0]),
