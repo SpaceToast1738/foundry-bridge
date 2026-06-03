@@ -41,6 +41,10 @@ don't invent your own styling. To add or edit a **single** journal page or actor
 `create_embedded`/`update_embedded` instead of rewriting the parent's whole `pages`/`items` array.
 The server's `INSTRUCTIONS.md` has the full document/page model.
 
+## Assets & images
+`browse_files` to find existing art; `upload_image` (base64) to add new art, then attach it with
+`modify_document { img: "<path>" }`. Browse before uploading to avoid duplicates.
+
 ## Reusing existing content
 Need a monster, spell, item, or premade content? Browse packs with `list_compendiums` /
 `search_compendium` and pull copies in with `import_from_compendium` (optionally into a folder) rather

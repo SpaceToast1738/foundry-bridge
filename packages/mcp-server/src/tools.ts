@@ -541,6 +541,37 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "browse_files",
+    description:
+      "List directories and files under a path in Foundry's data storage (e.g. \"worlds/<id>/assets\"). Use to discover existing art before uploading or referencing it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        target: { type: "string", description: "Directory path to browse (\"\" for the root)." },
+        source: { type: "string", description: "Storage source; defaults to \"data\"." },
+        type: { type: "string", description: "Filter, e.g. \"image\", \"audio\". Optional." },
+      },
+      required: ["target"],
+    },
+  });
+
+  tools.push({
+    name: "upload_image",
+    description:
+      "Upload a file (image/audio/etc.) to Foundry's data storage from base64 data. Returns the stored path, which you can set as a document image via modify_document { img: <path> }. Keep files under ~12 MB.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        target: { type: "string", description: "Destination directory, e.g. \"worlds/<id>/assets/avatars\"." },
+        filename: { type: "string", description: "Filename including extension, e.g. \"goblin.png\"." },
+        data_base64: { type: "string", description: "Base64-encoded file contents." },
+        source: { type: "string", description: "Storage source; defaults to \"data\"." },
+      },
+      required: ["target", "filename", "data_base64"],
+    },
+  });
+
+  tools.push({
     name: "show_credentials",
     description:
       "List the Foundry credentials this bridge is configured with. Passwords are never returned.",
@@ -591,6 +622,10 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMPENDIUM_SEARCH, params);
     case "import_from_compendium":
       return ctx.relay.call(Method.COMPENDIUM_IMPORT, params);
+    case "browse_files":
+      return ctx.relay.call(Method.FILES_BROWSE, params);
+    case "upload_image":
+      return ctx.relay.call(Method.FILES_UPLOAD, params);
     case "post_chat_message":
       return ctx.relay.call(Method.MESSAGES_CREATE, params);
     case "get_active_scene":

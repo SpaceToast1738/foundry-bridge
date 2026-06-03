@@ -45,6 +45,7 @@ import {
   handleCombatCreate,
   handleCombatRollInitiative,
 } from "./handlers/combat.js";
+import { handleFilesBrowse, handleFilesUpload } from "./handlers/files.js";
 
 export type Handler = (
   params: unknown,
@@ -115,6 +116,10 @@ const handlers: Partial<Record<Method, Handler>> = {
     ),
   [Method.COMBAT_ADVANCE]: (params) =>
     handleCombatAdvance(params as Parameters<typeof handleCombatAdvance>[0]),
+  [Method.FILES_BROWSE]: (params) =>
+    handleFilesBrowse(params as Parameters<typeof handleFilesBrowse>[0]),
+  [Method.FILES_UPLOAD]: (params) =>
+    handleFilesUpload(params as Parameters<typeof handleFilesUpload>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

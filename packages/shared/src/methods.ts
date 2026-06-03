@@ -28,6 +28,8 @@ export const Method = {
   COMBAT_ADD: "combat.add",
   COMBAT_ROLL_INITIATIVE: "combat.roll_initiative",
   COMBAT_ADVANCE: "combat.advance",
+  FILES_BROWSE: "files.browse",
+  FILES_UPLOAD: "files.upload",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -60,6 +62,8 @@ export const methodSchema = z.enum([
   Method.COMBAT_ADD,
   Method.COMBAT_ROLL_INITIATIVE,
   Method.COMBAT_ADVANCE,
+  Method.FILES_BROWSE,
+  Method.FILES_UPLOAD,
 ]);
 
 export const PermissionTier = {
@@ -96,6 +100,8 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.COMBAT_ADD]: PermissionTier.WRITE,
   [Method.COMBAT_ROLL_INITIATIVE]: PermissionTier.WRITE,
   [Method.COMBAT_ADVANCE]: PermissionTier.WRITE,
+  [Method.FILES_BROWSE]: PermissionTier.READ,
+  [Method.FILES_UPLOAD]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
 };
@@ -228,6 +234,17 @@ export const paramSchemas = {
   [Method.COMBAT_ADVANCE]: z.object({
     combat: docRefSchema.optional(),
     action: z.enum(["start", "next", "previous", "end"]),
+  }),
+  [Method.FILES_BROWSE]: z.object({
+    target: z.string(),
+    source: z.string().min(1).optional(),
+    type: z.string().min(1).optional(),
+  }),
+  [Method.FILES_UPLOAD]: z.object({
+    target: z.string(),
+    filename: z.string().min(1),
+    data_base64: z.string().min(1),
+    source: z.string().min(1).optional(),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

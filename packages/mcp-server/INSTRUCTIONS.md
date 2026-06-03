@@ -112,6 +112,15 @@ the world until imported.
 
 Prefer importing system content over hand-building it. Import first, then inspect/modify the world copy.
 
+## Assets & images
+
+- `browse_files { target, source?, type? }` — list directories/files under a data path (e.g.
+  `worlds/<id>/assets`). Discover existing art before uploading duplicates.
+- `upload_image { target, filename, data_base64, source? }` — upload a file from base64 into Foundry's
+  data storage; returns the stored `path`. Keep files under ~12 MB.
+- To use an uploaded asset, set it on a document with `modify_document { img: "<path>" }` (or the
+  relevant image field, e.g. a scene background or token texture). No separate tool.
+
 ## Folder filing
 
 - `create_folder({type, name, parent?})` creates a folder for documents of `type` (Actor / Item / JournalEntry / Scene). `parent` is an optional folder `_id` for nesting.
