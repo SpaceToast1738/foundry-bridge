@@ -31,6 +31,43 @@ If a tool returns `FORBIDDEN`, the bridge user is not a GM, the relevant tier is
 - `modify_document` takes `type`, `_id`, and `updates: [{...}]`. Updates are applied in order and deep-merged by Foundry.
 - `delete_document` takes `type` and `ids: [...]`. **Permanent.** Subject to the destructive tier and the configured bulk limit.
 
+## Building documents & journals
+
+Construct documents the way Foundry stores them. Inspect an existing document of the same type first
+(`get_*`) and copy its shape — fields vary by game system and live under `system.*`.
+
+**JournalEntry structure.** A journal is a container of **pages**, not one blob:
+
+```json
+{ "name": "...", "folder": null, "ownership": { "default": 0 }, "pages": [ /* page, page, ... */ ] }
+```
+
+Each text page:
+
+```json
+{ "type": "text", "name": "<section title>", "title": { "show": true, "level": 1 },
+  "text": { "format": 1, "content": "<html>" } }
+```
+
+- `format: 1` means HTML — use semantic tags (`<h1>`/`<h2>`, `<p>`, `<ul>`/`<li>`, `<strong>`/`<em>`).
+- Prefer **multiple pages** (one per section) over a single giant page — it matches how Foundry renders
+  and navigates a journal. Each page's `name` is its sidebar/TOC label.
+
+**Visibility — `ownership.default`** controls who can see a document:
+
+| value | meaning |
+|-------|---------|
+| `-1`  | inherit |
+| `0`   | none — GM-only (use for GM prep / behind-the-screen notes) |
+| `2`   | observer — players can read it (player-facing handouts) |
+| `3`   | owner |
+
+Set it deliberately rather than relying on the default.
+
+**Fit in, don't impose.** Before creating content, list a few neighbouring documents with `get_*` and
+match their structure, naming, and section layout. World-specific conventions belong in that world's
+GM-authored `AGENTS` journal — read it; don't invent your own.
+
 ## Folder filing
 
 - `create_folder({type, name, parent?})` creates a folder for documents of `type` (Actor / Item / JournalEntry / Scene). `parent` is an optional folder `_id` for nesting.

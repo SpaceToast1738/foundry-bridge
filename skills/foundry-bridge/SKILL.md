@@ -27,6 +27,13 @@ permission tiers; this skill is about *how to work well and safely*. World-speci
 - **Confirm before bulk or structural changes** (moving many entries, renaming folders, mass edits).
   Propose the plan first.
 
+## Building journals & documents
+Journals are **multi-page**: pass a `pages` array — one text page per section
+(`{type:"text", name, text:{content:"<html>", format:1}}`) — not one giant blob. Set
+`ownership.default` for visibility (`0` = GM-only, `2` = player-visible). Inspect a neighbouring
+document of the same type first and match its structure/naming. The server's `INSTRUCTIONS.md` has the
+full document/page model.
+
 ## Filing / organising recipe
 1. `get_folders` (e.g. `requested_fields: ["name","type","folder"]`) to see the current taxonomy.
 2. If a target folder is missing, `create_folder({type, name, parent?})` — name it to match the
