@@ -147,7 +147,8 @@ first to match the embedded document's schema.
 The `embedded` name is passed straight to Foundry, so **any** embedded type works — including Scene
 placeables and Active Effects. The field shapes below aren't obvious, so they're spelled out:
 
-**Map geometry (parent = a Scene).** Coordinates are scene pixels.
+**Map geometry (parent = a Scene).** Coordinates are scene pixels. As with tokens, create these on the
+**active/rendered** scene (see the placeables note under *Scenes & tokens*) — activate the scene first.
 
 - **Walls** — `embedded: "Wall"`, each `{ c: [x0, y0, x1, y1], door, ds, move, sense }`. `c` is the
   segment's endpoints. `door`: `0` none / `1` door / `2` secret. `ds` (door state): `0` closed / `1`
@@ -224,6 +225,13 @@ Prefer importing system content over hand-building it. Import first, then inspec
   Delete a token with `delete_embedded` (`embedded: "Token"`, parent = the Scene).
 
 Coordinates are scene pixels. Use `get_active_scene` for the scene's dimensions before placing.
+
+> **Placeables target the active scene.** The bridge runs inside a headless Foundry client, and scene
+> placeables (tokens, walls, lights, notes, tiles) reliably create only on the **active/rendered** scene
+> with a valid grid/dimensions. Building on a non-active scene can stall; if a placeable call returns a
+> `TIMEOUT` saying so, **`activate_scene` the target first** (or build on the active scene) rather than
+> retrying. Scenes you create via `create_document` need real dimensions + grid before they'll accept
+> placeables — set those (and activate) first.
 
 - `update_scene { scene?, updates }` — change a scene's environment/config (e.g. `{ darkness: 0.8 }`,
   grid, weather, background); defaults to the active scene. Inspect with `get_scene` first for paths.

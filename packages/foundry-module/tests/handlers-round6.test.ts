@@ -8,7 +8,7 @@ import {
   handleCardsShuffle,
 } from "../src/handlers/cards";
 import { handleTimeAdvance, handleTimeSet } from "../src/handlers/time";
-import { handleWallsDraw } from "../src/handlers/scenes";
+import { handleWallsDraw, withTimeout } from "../src/handlers/scenes";
 import { installFakeGame, type FakeDoc } from "./helpers/fake-game";
 
 describe("get_status", () => {
@@ -64,6 +64,20 @@ describe("game time", () => {
       code: ErrorCode.UNAVAILABLE,
     });
     restore();
+  });
+});
+
+describe("withTimeout", () => {
+  it("resolves with the value when the promise settles in time", async () => {
+    await expect(withTimeout(Promise.resolve(42), 1000, "nope")).resolves.toBe(42);
+  });
+
+  it("rejects with a TIMEOUT BridgeError when the promise hangs", async () => {
+    const never = new Promise<number>(() => {});
+    await expect(withTimeout(never, 10, "scene wedged — activate it first")).rejects.toMatchObject({
+      code: ErrorCode.TIMEOUT,
+      message: "scene wedged — activate it first",
+    });
   });
 });
 

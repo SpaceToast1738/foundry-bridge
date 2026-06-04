@@ -84,6 +84,8 @@ On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed
 - **Scene env / maps:** `update_scene` (darkness/lighting/weather), `reset_fog`; `draw_walls` for
   walls & doors. Build lights/notes/tiles and timed effects with `create_embedded` (`"AmbientLight"`,
   `"Note"`, `"ActiveEffect"` with a `duration`) — see the server `INSTRUCTIONS.md` for field shapes.
+  Placeables (walls/tokens/lights/notes) create reliably only on the **active** scene — `activate_scene`
+  first; a `TIMEOUT` that says so means "activate the target scene," not "retry."
 - **Cards:** `shuffle_cards`/`deal_cards`/`draw_cards`/`pass_cards`/`reset_cards` for worlds with decks.
 - **Game time:** `advance_time { seconds }` (negative rewinds) / `set_world_time`.
 - **Present:** `show_to_players` (image/journal), `pull_to_scene`, `ping_location`.
