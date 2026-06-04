@@ -35,12 +35,21 @@ function loadActiveCredential() {
   if (!Array.isArray(all) || all.length === 0) {
     throw new Error(`No credentials in ${CREDENTIALS_PATH}`);
   }
-  const active = ACTIVE_ID
-    ? all.find((c) => c._id === ACTIVE_ID)
-    : all[0];
+  let active = ACTIVE_ID ? all.find((c) => c._id === ACTIVE_ID) : all[0];
+  // Tolerant selection: if an explicit id was set but didn't match and there's
+  // only one credential, use it rather than crash-looping on a label mismatch.
+  if (!active && ACTIVE_ID && all.length === 1) {
+    log(
+      "warn",
+      `FOUNDRY_BRIDGE_CREDENTIAL_ID='${ACTIVE_ID}' did not match; using the only credential (_id='${all[0]._id}')`,
+    );
+    active = all[0];
+  }
   if (!active) {
     throw new Error(
-      `No credential matched FOUNDRY_BRIDGE_CREDENTIAL_ID=${ACTIVE_ID}`,
+      `No credential matched FOUNDRY_BRIDGE_CREDENTIAL_ID='${ACTIVE_ID}' (have: ${all
+        .map((c) => `'${c._id}'`)
+        .join(", ")})`,
     );
   }
   for (const field of ["hostname", "password"]) {
@@ -48,13 +57,19 @@ function loadActiveCredential() {
       throw new Error(`Credential is missing string field '${field}'`);
     }
   }
-  // Need at least one way to identify the user: `username` (the display name,
-  // stable across worlds — preferred) or `userid` (the user document _id,
-  // which is regenerated whenever a world is rebuilt — brittle, kept for
-  // backwards compatibility).
-  if (typeof active.username !== "string" && typeof active.userid !== "string") {
+  // Identify the user by display name(s) — `username` (string) or `usernames`
+  // (array of candidates, first present in the launched world wins). Names are
+  // stable across worlds, so the same bot name in every world lets the bridge
+  // follow whichever world is launched. `userid` (the user document _id) is a
+  // brittle fallback — it's regenerated whenever a world is rebuilt.
+  active.usernames = Array.isArray(active.usernames)
+    ? active.usernames.filter((n) => typeof n === "string")
+    : typeof active.username === "string"
+      ? [active.username]
+      : [];
+  if (active.usernames.length === 0 && typeof active.userid !== "string") {
     throw new Error(
-      "Credential needs a 'username' (preferred) or 'userid' field",
+      "Credential needs a 'username'/'usernames' (preferred) or 'userid' field",
     );
   }
   return active;
@@ -89,26 +104,35 @@ async function joinWorld(page, cred) {
       "Foundry /join form did not expose a userid select (world may not be running, or selector changed)",
     );
   }
-  // Prefer matching by username (the option's visible label) — it's stable
-  // across worlds. Fall back to userid (the option's value = user document
-  // _id), which changes whenever a world is rebuilt. On failure, enumerate the
-  // available users so the journal says exactly what's wrong.
-  try {
-    if (typeof cred.username === "string") {
-      await userSelect.selectOption({ label: cred.username });
-    } else {
-      await userSelect.selectOption(cred.userid);
+  // Enumerate the dropdown up front so we can match by display name (stable
+  // across worlds) and, on a miss, say exactly which users *are* available —
+  // no opaque 30s selectOption timeout.
+  const options = await userSelect
+    .locator("option")
+    .evaluateAll((els) =>
+      els
+        .map((e) => ({ value: e.value, label: (e.textContent || "").trim() }))
+        .filter((o) => o.value),
+    );
+  let chosen;
+  for (const name of cred.usernames) {
+    const match = options.find((o) => o.label === name);
+    if (match) {
+      chosen = match.value;
+      log("info", `matched bridge user by name '${name}'`);
+      break;
     }
-  } catch {
-    const options = await userSelect
-      .locator("option")
-      .evaluateAll((els) =>
-        els
-          .map((e) => ({ value: e.value, label: (e.textContent || "").trim() }))
-          .filter((o) => o.value),
-      );
-    const want = typeof cred.username === "string"
-      ? `username '${cred.username}'`
+  }
+  if (!chosen && typeof cred.userid === "string") {
+    const match = options.find((o) => o.value === cred.userid);
+    if (match) {
+      chosen = match.value;
+      log("info", `matched bridge user by userid '${cred.userid}' (label '${match.label}')`);
+    }
+  }
+  if (!chosen) {
+    const want = cred.usernames.length
+      ? `username(s) ${cred.usernames.map((n) => `'${n}'`).join("/")}`
       : `userid '${cred.userid}'`;
     log(
       "error",
@@ -116,10 +140,11 @@ async function joinWorld(page, cred) {
     );
     throw new Error(
       `Configured bridge user (${want}) is not in the launched world. ` +
-        `Available: ${options.map((o) => o.label).join(", ") || "(none)"}. ` +
-        "Set credential.username to the bridge user's display name, or update userid to its current document _id.",
+        `Available: ${options.map((o) => o.label).join(", ") || "(none — is a world launched?)"}. ` +
+        "Create a GM user with one of those names in every world you want the bridge to manage.",
     );
   }
+  await userSelect.selectOption(chosen);
 
   const passwordField = page.locator('input[name="password"]');
   if (await passwordField.count()) {
@@ -152,7 +177,10 @@ async function waitForBridgeReady(page) {
 
 async function main() {
   const cred = loadActiveCredential();
-  log("info", `using credential _id=${cred._id} host=${cred.hostname}`);
+  const matchBy = cred.usernames.length
+    ? `username(s) ${cred.usernames.join("/")}`
+    : `userid ${cred.userid}`;
+  log("info", `using credential _id=${cred._id} host=${cred.hostname} match-by ${matchBy}`);
 
   const relayOrigin = process.env.FOUNDRY_BRIDGE_RELAY_ORIGIN ??
     "http://127.0.0.1:31414";

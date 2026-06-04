@@ -101,7 +101,7 @@ Place the credentials file (mode 600):
 ```bash
 install -o root -g foundry-bridge -m 640 \
   deploy/credentials.example.json /etc/foundry-bridge/credentials.json
-# then edit /etc/foundry-bridge/credentials.json — fill in userid + password
+# then edit /etc/foundry-bridge/credentials.json — fill in username + password
 chmod 600 /etc/foundry-bridge/credentials.json
 ```
 
@@ -112,6 +112,25 @@ world doesn't break login.
 > Legacy alternative: a `userid` field (the Foundry user **document `_id`**) is still accepted as a
 > fallback, but it is **regenerated whenever a world is rebuilt**, so prefer `username`. If you must use
 > it, fetch it from the GM console: `game.users.getName("mcp-bridge").id`.
+
+### Switching between worlds (one live at a time)
+
+A single Foundry instance runs one world at a time, and the bridge follows **whichever world is
+launched**. To let it manage several worlds interchangeably, **create a GM user with the same name (and
+password) in each world** — then one credential works everywhere, and when you launch a different world
+the headless client re-joins it automatically (the heartbeat re-joins within `FOUNDRY_BRIDGE_RELOAD_INTERVAL_MS`).
+`get_status` reports which world is currently connected.
+
+If different worlds use different bot names, list them all and the first present wins:
+
+```json
+[{ "_id": "primary", "hostname": "foundry.example.com",
+   "usernames": ["GMBot", "mcp-bridge"], "password": "…" }]
+```
+
+> `FOUNDRY_BRIDGE_CREDENTIAL_ID` only selects *which* entry in this array to use (for multiple Foundry
+> instances). With a single credential it's optional — if it's set but doesn't match, the launcher falls
+> back to the sole entry with a warning rather than failing.
 
 Place the env file:
 
