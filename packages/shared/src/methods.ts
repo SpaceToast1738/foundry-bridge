@@ -59,6 +59,15 @@ export const Method = {
   COMBAT_SET_INITIATIVE: "combat.set_initiative",
   COMBAT_REMOVE: "combat.remove_combatant",
   MACRO_EXECUTE: "macro.execute",
+  STATUS_GET: "status.get",
+  CARDS_DEAL: "cards.deal",
+  CARDS_DRAW: "cards.draw",
+  CARDS_SHUFFLE: "cards.shuffle",
+  CARDS_PASS: "cards.pass",
+  CARDS_RESET: "cards.reset",
+  TIME_ADVANCE: "time.advance",
+  TIME_SET: "time.set",
+  WALLS_DRAW: "scene.draw_walls",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -122,6 +131,15 @@ export const methodSchema = z.enum([
   Method.COMBAT_SET_INITIATIVE,
   Method.COMBAT_REMOVE,
   Method.MACRO_EXECUTE,
+  Method.STATUS_GET,
+  Method.CARDS_DEAL,
+  Method.CARDS_DRAW,
+  Method.CARDS_SHUFFLE,
+  Method.CARDS_PASS,
+  Method.CARDS_RESET,
+  Method.TIME_ADVANCE,
+  Method.TIME_SET,
+  Method.WALLS_DRAW,
 ]);
 
 export const PermissionTier = {
@@ -188,6 +206,15 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.SCENE_RESET_FOG]: PermissionTier.WRITE,
   [Method.COMBAT_SET_INITIATIVE]: PermissionTier.WRITE,
   [Method.COMBAT_REMOVE]: PermissionTier.WRITE,
+  [Method.STATUS_GET]: PermissionTier.READ,
+  [Method.CARDS_DEAL]: PermissionTier.WRITE,
+  [Method.CARDS_DRAW]: PermissionTier.WRITE,
+  [Method.CARDS_SHUFFLE]: PermissionTier.WRITE,
+  [Method.CARDS_PASS]: PermissionTier.WRITE,
+  [Method.CARDS_RESET]: PermissionTier.WRITE,
+  [Method.TIME_ADVANCE]: PermissionTier.WRITE,
+  [Method.TIME_SET]: PermissionTier.WRITE,
+  [Method.WALLS_DRAW]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.MACRO_EXECUTE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
@@ -218,6 +245,10 @@ export const paramSchemas = {
     collection: z.string().min(1),
     where: z.record(z.string(), z.unknown()).optional(),
     requested_fields: z.array(z.string()).optional(),
+    sort: z.string().min(1).optional(),
+    sort_dir: z.enum(["asc", "desc"]).optional(),
+    offset: z.number().int().nonnegative().optional(),
+    limit: z.number().int().positive().optional(),
     max_length: z.number().int().positive().optional(),
   }),
   [Method.DOCUMENTS_GET]: z.object({
@@ -465,6 +496,41 @@ export const paramSchemas = {
   [Method.MACRO_EXECUTE]: z.object({
     macro: docRefSchema,
     args: z.record(z.string(), z.unknown()).optional(),
+  }),
+  [Method.STATUS_GET]: z.object({}).optional(),
+  [Method.CARDS_DEAL]: z.object({
+    deck: docRefSchema,
+    to: z.array(docRefSchema).min(1),
+    number: z.number().int().positive().optional(),
+  }),
+  [Method.CARDS_DRAW]: z.object({
+    to: docRefSchema,
+    from: docRefSchema,
+    number: z.number().int().positive().optional(),
+  }),
+  [Method.CARDS_SHUFFLE]: z.object({ deck: docRefSchema }),
+  [Method.CARDS_PASS]: z.object({
+    from: docRefSchema,
+    to: docRefSchema,
+    cards: z.array(z.string().min(1)).min(1),
+  }),
+  [Method.CARDS_RESET]: z.object({ deck: docRefSchema }),
+  [Method.TIME_ADVANCE]: z.object({ seconds: z.number().int() }),
+  [Method.TIME_SET]: z.object({ worldTime: z.number().int().nonnegative() }),
+  [Method.WALLS_DRAW]: z.object({
+    scene: docRefSchema.optional(),
+    segments: z
+      .array(
+        z.object({
+          x1: z.number(),
+          y1: z.number(),
+          x2: z.number(),
+          y2: z.number(),
+          door: z.number().int().min(0).max(2).optional(),
+          ds: z.number().int().min(0).max(2).optional(),
+        }),
+      )
+      .min(1),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

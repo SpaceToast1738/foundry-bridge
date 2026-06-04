@@ -142,6 +142,26 @@ export async function handleSceneResetFog(
   return { scene: scene.id, fogReset: true };
 }
 
+export async function handleWallsDraw(
+  params: ParamsFor<typeof Method.WALLS_DRAW>,
+): Promise<Record<string, unknown>> {
+  const scene = resolveScene(params.scene);
+  const wallData = params.segments.map((seg) => {
+    const data: Record<string, unknown> = {
+      c: [seg.x1, seg.y1, seg.x2, seg.y2],
+    };
+    if (seg.door !== undefined) data.door = seg.door;
+    if (seg.ds !== undefined) data.ds = seg.ds;
+    return data;
+  });
+  const created = await scene.createEmbeddedDocuments("Wall", wallData);
+  return {
+    scene: scene.id,
+    created: created.length,
+    walls: created.map(docToObject),
+  };
+}
+
 export async function handleTokenUpdate(
   params: ParamsFor<typeof Method.TOKEN_UPDATE>,
 ): Promise<Record<string, unknown>> {

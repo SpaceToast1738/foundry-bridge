@@ -1,6 +1,7 @@
 import {
   filterDocumentFields,
   filterDocumentsByWhere,
+  sortDocuments,
   truncateDocuments,
 } from "../src/document-utils";
 
@@ -48,6 +49,53 @@ describe("filterDocumentsByWhere", () => {
       folder: "f1",
     });
     expect(filtered).toEqual([docs[0]]);
+  });
+});
+
+describe("sortDocuments", () => {
+  it("returns a copy unchanged when no field is given", () => {
+    const docs = [{ name: "b" }, { name: "a" }];
+    expect(sortDocuments(docs, undefined, undefined)).toEqual(docs);
+  });
+
+  it("sorts ascending by a top-level field (numeric-aware, case-insensitive)", () => {
+    const docs = [{ name: "Banana" }, { name: "apple" }, { name: "cherry" }];
+    expect(sortDocuments(docs, "name", "asc").map((d) => d.name)).toEqual([
+      "apple",
+      "Banana",
+      "cherry",
+    ]);
+  });
+
+  it("sorts descending and by dotted path", () => {
+    const docs = [
+      { name: "a", system: { cr: 2 } },
+      { name: "b", system: { cr: 10 } },
+      { name: "c", system: { cr: 1 } },
+    ];
+    expect(sortDocuments(docs, "system.cr", "desc").map((d) => d.name)).toEqual([
+      "b",
+      "a",
+      "c",
+    ]);
+  });
+
+  it("keeps missing values last in both directions and is stable", () => {
+    const docs = [
+      { name: "a", v: 2 },
+      { name: "b" },
+      { name: "c", v: 1 },
+      { name: "d" },
+    ];
+    expect(sortDocuments(docs, "v", "asc").map((d) => d.name)).toEqual(["c", "a", "b", "d"]);
+    expect(sortDocuments(docs, "v", "desc").map((d) => d.name)).toEqual(["a", "c", "b", "d"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const docs = [{ name: "b" }, { name: "a" }];
+    const before = [...docs];
+    sortDocuments(docs, "name", "asc");
+    expect(docs).toEqual(before);
   });
 });
 

@@ -12,13 +12,17 @@ permission tiers; this skill is about *how to work well and safely*. World-speci
 
 ## Start every session
 1. `get_world` — confirm you're connected and on the intended world (title, system, version).
+   If anything errors, `get_status` reports relay connectivity, module version, and the tier states
+   (it never errors when disconnected — returns `{ relayConnected: false }`).
 2. Read the world's guidance: `get_journals` with `where: {"name": "AGENTS"}` (also try
    `"AI Instructions"`). If found, **follow it** — it defines this world's folder taxonomy, naming
    conventions, and what's off-limits. The GM's instructions override these defaults.
 
 **Finding things:** `where` only matches exact field values. To locate a document by a word in its name
 or journal text, use `search_documents` (substring, case-insensitive). Read results include each doc's
-`uuid` — cross-link documents with `@UUID[<uuid>]{label}` in HTML content.
+`uuid` — cross-link documents with `@UUID[<uuid>]{label}` in HTML content. For big collections, page
+with `sort` + `offset`/`limit`; if a list comes back `truncated: true`, it's incomplete — narrow or page
+rather than trusting it.
 
 ## Core discipline
 - **Read before you write.** Inspect a document with the matching `get_*` before `modify_document` —
@@ -77,7 +81,11 @@ On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed
   an actor/item/journal (great for reskinning).
 - **Combat:** `start_combat` → `add_combatants` (token ids) → `roll_initiative` → `advance_combat`
   (`next`/`next_round`/`end`); `set_initiative`/`remove_combatant` for fine control.
-- **Scene env:** `update_scene` (darkness/lighting/weather), `reset_fog`.
+- **Scene env / maps:** `update_scene` (darkness/lighting/weather), `reset_fog`; `draw_walls` for
+  walls & doors. Build lights/notes/tiles and timed effects with `create_embedded` (`"AmbientLight"`,
+  `"Note"`, `"ActiveEffect"` with a `duration`) — see the server `INSTRUCTIONS.md` for field shapes.
+- **Cards:** `shuffle_cards`/`deal_cards`/`draw_cards`/`pass_cards`/`reset_cards` for worlds with decks.
+- **Game time:** `advance_time { seconds }` (negative rewinds) / `set_world_time`.
 - **Present:** `show_to_players` (image/journal), `pull_to_scene`, `ping_location`.
 - **Macros:** `execute_macro` runs stored code — destructive-tier gated; use sparingly.
 

@@ -44,10 +44,29 @@ const listInputSchema = {
       description:
         "Field names to include in each document. _id and name are always included.",
     },
+    sort: {
+      type: "string",
+      description:
+        "Field path to sort by before paging, e.g. \"name\" or \"system.cr\". Missing values sort last.",
+    },
+    sort_dir: {
+      type: "string",
+      enum: ["asc", "desc"],
+      description: "Sort direction (default \"asc\"). Only applies when 'sort' is set.",
+    },
+    offset: {
+      type: "integer",
+      description: "Number of matched documents to skip before returning results (for paging).",
+    },
+    limit: {
+      type: "integer",
+      description: "Maximum number of documents to return (page size). Use with 'offset' to page.",
+    },
     max_length: {
       type: "integer",
       description:
-        "Maximum response size in bytes. Documents are removed from the tail until the JSON fits.",
+        "Maximum response size in bytes. Documents are removed from the tail until the JSON fits. " +
+        "The response sets truncated=true if this dropped any documents — prefer limit/offset paging over a trimmed list.",
     },
   },
   required: [],
@@ -949,6 +968,120 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "get_status",
+    description:
+      "Health & diagnostics: whether a Foundry client is connected to the bridge relay, the module version, the world (title/system/version/counts), and the read/write/destructive tier states. Safe to call any time — returns { relayConnected:false } instead of erroring when no client is connected.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  });
+
+  tools.push({
+    name: "deal_cards",
+    description:
+      "Deal cards from a deck to one or more hands/piles. `deck` and each `to` entry are card-stack refs (_id/name); `number` per hand (default 1).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deck: docRefSchema,
+        to: { type: "array", items: docRefSchema, description: "Hand/pile stacks to deal to." },
+        number: { type: "integer", description: "Cards to deal to each hand (default 1)." },
+      },
+      required: ["deck", "to"],
+    },
+  });
+
+  tools.push({
+    name: "draw_cards",
+    description:
+      "Draw cards into a hand (`to`) from a deck/pile (`from`). Both are card-stack refs; `number` (default 1).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        to: docRefSchema,
+        from: docRefSchema,
+        number: { type: "integer", description: "Cards to draw (default 1)." },
+      },
+      required: ["to", "from"],
+    },
+  });
+
+  tools.push({
+    name: "shuffle_cards",
+    description: "Shuffle a card stack (deck) in place. `deck` is a card-stack ref.",
+    inputSchema: { type: "object", properties: { deck: docRefSchema }, required: ["deck"] },
+  });
+
+  tools.push({
+    name: "pass_cards",
+    description:
+      "Pass specific cards from one stack to another. `from`/`to` are card-stack refs; `cards` is an array of card _ids.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from: docRefSchema,
+        to: docRefSchema,
+        cards: { type: "array", items: { type: "string" }, description: "Card _ids to pass." },
+      },
+      required: ["from", "to", "cards"],
+    },
+  });
+
+  tools.push({
+    name: "reset_cards",
+    description: "Reset a card stack — recall all its cards back to the deck. `deck` is a card-stack ref.",
+    inputSchema: { type: "object", properties: { deck: docRefSchema }, required: ["deck"] },
+  });
+
+  tools.push({
+    name: "advance_time",
+    description:
+      "Advance (or rewind) the in-game world clock by `seconds` (negative rewinds). Returns the new worldTime.",
+    inputSchema: {
+      type: "object",
+      properties: { seconds: { type: "integer", description: "Seconds to advance; may be negative." } },
+      required: ["seconds"],
+    },
+  });
+
+  tools.push({
+    name: "set_world_time",
+    description: "Set the in-game world clock to an absolute `worldTime` (seconds since the world epoch).",
+    inputSchema: {
+      type: "object",
+      properties: { worldTime: { type: "integer", description: "Absolute world time in seconds (>=0)." } },
+      required: ["worldTime"],
+    },
+  });
+
+  tools.push({
+    name: "draw_walls",
+    description:
+      "Add wall segments to a scene (defaults to the active scene). Each segment is pixel coords {x1,y1,x2,y2}; optional `door` (0 none, 1 door, 2 secret) and `ds` (door state: 0 closed, 1 open, 2 locked). Good for blocking line-of-sight/movement and adding doors.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene: docRefSchema,
+        segments: {
+          type: "array",
+          description: "Wall segments to create.",
+          items: {
+            type: "object",
+            properties: {
+              x1: { type: "number" },
+              y1: { type: "number" },
+              x2: { type: "number" },
+              y2: { type: "number" },
+              door: { type: "integer", enum: [0, 1, 2] },
+              ds: { type: "integer", enum: [0, 1, 2] },
+            },
+            required: ["x1", "y1", "x2", "y2"],
+          },
+        },
+      },
+      required: ["segments"],
+    },
+  });
+
+  tools.push({
     name: "show_credentials",
     description:
       "List the Foundry credentials this bridge is configured with. Passwords are never returned.",
@@ -1061,6 +1194,31 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMBAT_REMOVE, params);
     case "execute_macro":
       return ctx.relay.call(Method.MACRO_EXECUTE, params);
+    case "get_status": {
+      // Health tool: must answer even when no Foundry client is connected,
+      // so don't go through relay.call (which throws UNAVAILABLE).
+      if (!ctx.relay.isConnected()) {
+        return { relayConnected: false };
+      }
+      const status = (await ctx.relay.call(Method.STATUS_GET, {})) as Record<string, unknown>;
+      return { relayConnected: true, ...status };
+    }
+    case "deal_cards":
+      return ctx.relay.call(Method.CARDS_DEAL, params);
+    case "draw_cards":
+      return ctx.relay.call(Method.CARDS_DRAW, params);
+    case "shuffle_cards":
+      return ctx.relay.call(Method.CARDS_SHUFFLE, params);
+    case "pass_cards":
+      return ctx.relay.call(Method.CARDS_PASS, params);
+    case "reset_cards":
+      return ctx.relay.call(Method.CARDS_RESET, params);
+    case "advance_time":
+      return ctx.relay.call(Method.TIME_ADVANCE, params);
+    case "set_world_time":
+      return ctx.relay.call(Method.TIME_SET, params);
+    case "draw_walls":
+      return ctx.relay.call(Method.WALLS_DRAW, params);
     case "post_chat_message":
       return ctx.relay.call(Method.MESSAGES_CREATE, params);
     case "get_active_scene":

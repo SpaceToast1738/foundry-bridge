@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Derive version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Stamp module manifest for this release
+        env:
+          RELEASE_VERSION: ${{ steps.ver.outputs.version }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/prepare-release.mjs
+
+      - name: Build + bundle
+        run: npm run dist
+
+      - name: Verify + test
+        run: |
+          npm test
+          npm run lint
+
+      - name: Package module zip
+        run: |
+          cd packages/foundry-module/dist
+          zip -r "$GITHUB_WORKSPACE/foundry-bridge.zip" .
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: foundry-bridge ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            foundry-bridge.zip
+            packages/foundry-module/dist/module.json

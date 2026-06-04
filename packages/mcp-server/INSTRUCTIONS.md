@@ -8,9 +8,9 @@ The bridge enforces three tiers, each gated by a world setting in the module:
 
 | Tier | Methods | Default |
 |------|---------|---------|
-| **read** | `get_world`, `get_*`, `ping` | always on for the GM |
-| **write** | `create_*`, `modify_document`, `create_folder`, `move_to_folder` | on |
-| **destructive** | `delete_document` | **off** — opt-in per world |
+| **read** | `get_world`, `get_status`, `get_*`, `search_documents`, `ping` | always on for the GM |
+| **write** | `create_*`, `modify_document`, folders, scenes, combat, cards, `advance_time`, `draw_walls`, … | on |
+| **destructive** | `delete_document`, `delete_embedded`, `execute_macro` | **off** — opt-in per world |
 
 If a tool returns `FORBIDDEN`, the bridge user is not a GM, the relevant tier is off, or a bulk-limit was exceeded. Do not retry — tell the human.
 
@@ -19,12 +19,23 @@ If a tool returns `FORBIDDEN`, the bridge user is not a GM, the relevant tier is
 1. Run `get_world` to confirm the bridge is connected and you have the right world.
 2. Look for a journal entry named `AGENTS`, `AI Instructions`, or similar. Search with `get_journals` using `where: {"name": "AGENTS"}` or list with `requested_fields: ["name"]` and scan. If a GM left instructions there, follow them.
 
+If a call returns `UNAVAILABLE` or behaves oddly, call **`get_status`** — it reports whether a Foundry
+client is connected to the relay (`relayConnected`), the module version, the world (title/system/version
+and per-collection counts), and the current **tier states** (`writeEnabled`/`destructiveEnabled`). Unlike
+other tools it never errors when nothing is connected — it returns `{ relayConnected: false }`. Use it to
+diagnose before retrying, and to check whether the destructive tier is on before attempting a delete.
+
 ## Reading documents
 
 - List tools per collection: `get_actors`, `get_items`, `get_journals`, `get_folders`, `get_scenes`,
   `get_users`, `get_tables`, `get_playlists`, `get_macros`, `get_cards`, `get_combats`. Use `where` for
-  AND-combined **exact-match** filtering and `requested_fields` to project. `max_length` (bytes) trims
-  documents from the tail until the JSON fits.
+  AND-combined **exact-match** filtering and `requested_fields` to project.
+- **Paging large collections.** Lists also accept `sort` (field path, e.g. `"name"` or `"system.cr"`),
+  `sort_dir` (`"asc"`/`"desc"`), `offset`, and `limit`. Every list response includes `total` (matches
+  before paging), `count` (returned), `offset`, `limit`, and **`truncated`**. `max_length` (bytes) trims
+  documents from the tail until the JSON fits — if it dropped any, `truncated` is `true`. **When you see
+  `truncated: true`, don't trust the list as complete** — narrow with `where`/`requested_fields`, or page
+  with `sort` + `offset`/`limit` instead.
 - `get_actor` / `get_item` / etc. fetch a single document. Provide `_id` (preferred) or `name`.
 - **`search_documents`** does case-insensitive **substring** search over names (and journal page text)
   across collections — use it to find something when you don't know its exact name; use `where` only for
@@ -133,6 +144,34 @@ Some documents live *inside* a parent: JournalEntry **pages** (`JournalEntryPage
 Prefer these over replacing a parent's whole `pages`/`items` array. Inspect the parent with `get_*`
 first to match the embedded document's schema.
 
+The `embedded` name is passed straight to Foundry, so **any** embedded type works — including Scene
+placeables and Active Effects. The field shapes below aren't obvious, so they're spelled out:
+
+**Map geometry (parent = a Scene).** Coordinates are scene pixels.
+
+- **Walls** — `embedded: "Wall"`, each `{ c: [x0, y0, x1, y1], door, ds, move, sense }`. `c` is the
+  segment's endpoints. `door`: `0` none / `1` door / `2` secret. `ds` (door state): `0` closed / `1`
+  open / `2` locked. (For batch walls / simple doors, the `draw_walls` tool is easier — see *Scenes*.)
+- **Lights** — `embedded: "AmbientLight"`, each `{ x, y, config: { dim, bright, color, alpha, angle } }`
+  (`dim`/`bright` are radii in scene units; `color` like `"#ff9900"`).
+- **Map notes** — `embedded: "Note"`, each `{ x, y, entryId: "<JournalEntry _id>", text, iconSize }`.
+  Links a pin on the map to a journal entry (resolve the journal's `_id` first).
+- **Tiles** (`"Tile"`: `{ x, y, width, height, texture: { src } }`) and **Drawings** (`"Drawing"`) work
+  the same way. Update/delete by `_id` with `update_embedded`/`delete_embedded`.
+
+**Active Effects / timed buffs (parent = an Actor or Item).** `embedded: "ActiveEffect"`, each:
+
+```json
+{ "name": "Bless", "icon": "icons/svg/aura.svg", "disabled": false,
+  "duration": { "rounds": 10, "turns": null, "seconds": null },
+  "changes": [ { "key": "system.attributes.ac.bonus", "mode": 2, "value": "2" } ] }
+```
+
+`duration` can be in `rounds`/`turns` (combat) or `seconds` (world time). `changes[].mode`: `1` multiply,
+`2` add, `5` override (most buffs use `2`/add). The `key` path is system-specific — inspect a real effect
+on a sheet first. Remove with `delete_embedded` `"ActiveEffect"`; toggle with `update_embedded`
+`{ _id, disabled: true|false }`. (For named status conditions like *prone*, prefer `toggle_condition`.)
+
 ## Compendia (importing content)
 
 Compendium packs hold reusable content (monsters, spells, items, premade journals) that lives outside
@@ -189,6 +228,11 @@ Coordinates are scene pixels. Use `get_active_scene` for the scene's dimensions 
 - `update_scene { scene?, updates }` — change a scene's environment/config (e.g. `{ darkness: 0.8 }`,
   grid, weather, background); defaults to the active scene. Inspect with `get_scene` first for paths.
 - `reset_fog { scene? }` — clear the fog of war / exploration on a scene.
+- `draw_walls { scene?, segments }` — add wall segments in one call. Each segment is
+  `{ x1, y1, x2, y2, door?, ds? }` (`door`: 0 none / 1 door / 2 secret; `ds`: 0 closed / 1 open / 2
+  locked). Defaults to the active scene. Convenience over `create_embedded` `"Wall"` for blocking
+  line-of-sight/movement and adding doors. For lights/notes/tiles, use `create_embedded` (see
+  *Embedded documents → Map geometry*).
 
 ## Dice & tables
 
@@ -223,6 +267,23 @@ All return combat state: `{ round, turn, combatants:[{ name, initiative, tokenId
   or show a **journal** to all players.
 - `pull_to_scene { scene }` — pull all players' views to a scene.
 - `ping_location { x, y, scene? }` — ping a point on the active scene to draw attention.
+
+## Cards & decks
+
+For worlds that use card stacks (a deck, plus player hands/piles — all `Cards` documents, listed by
+`get_cards`). All take stack refs (`_id`/`name`):
+
+- `shuffle_cards { deck }` — shuffle a deck/stack in place.
+- `deal_cards { deck, to: [hands], number? }` — deal `number` (default 1) cards from `deck` to each hand.
+- `draw_cards { to, from, number? }` — draw into a hand (`to`) from a deck/pile (`from`).
+- `pass_cards { from, to, cards: [ids] }` — pass specific cards (by card `_id`) between stacks.
+- `reset_cards { deck }` — recall all cards back to the deck (resets the stack).
+
+## Game time
+
+- `advance_time { seconds }` — move the in-game world clock forward (or back, with a negative value).
+  Returns the new `worldTime`. Combine with combat for time-of-day, or to tick down effect durations.
+- `set_world_time { worldTime }` — set the clock to an absolute time (seconds since the world epoch).
 
 ## Macros
 

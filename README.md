@@ -1,6 +1,6 @@
 # foundry-bridge
 
-Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — reading and search across collections, generic document CRUD, embedded documents (journal pages, actor items), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, dice & roll tables, combat encounters, asset upload, actor operations (conditions, ownership, HP), roll tables, audio/playlists, chat-log reading, document duplication, player presentation (show/pull/ping), scene environment, and macro execution, plus an optional D&D-5e adapter (typed damage, rolls, rests) — all gated by read/write/destructive permission tiers.
+Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — paginated/sorted reads and search across collections, generic document CRUD, embedded documents (journal pages, actor items, map walls/lights/notes, timed active effects), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, map geometry, dice & roll tables, combat encounters, asset upload, actor operations (conditions, ownership, HP), audio/playlists, chat-log reading, document duplication, player presentation (show/pull/ping), scene environment, cards & decks, game-time control, a health/status probe, and macro execution, plus an optional D&D-5e adapter (typed damage, rolls, rests) — all gated by read/write/destructive permission tiers.
 
 See [HANDOFF.md on foundry-mcp:fix/audit-and-sdk-1x](https://github.com/SpaceToast1738/foundry-mcp/blob/fix/audit-and-sdk-1x/HANDOFF.md) for background on why we pivoted away from the raw-WebSocket approach.
 
@@ -35,12 +35,15 @@ is exceeded; `UNAVAILABLE` if no Foundry client is connected to the relay.
 | Tool | Description |
 |------|-------------|
 | `get_world` | Compact world descriptor: title, system, version, and per-collection counts. |
+| `get_status` | Health/diagnostics: relay connectivity, module version, world descriptor, and the read/write/destructive tier states. Returns `{ relayConnected: false }` instead of erroring when no client is connected. |
 | `ping` | Health check; returns `{ pong: true, timestamp }`. |
 
 ### Reading · `read`
 List and single-get tools are generated per collection. Lists accept `where` (exact-match,
-AND-combined), `requested_fields` (projection; `_id`/`name`/`uuid` always included), and `max_length`
-(byte cap). Single-gets take `_id` (preferred) or `name`. Every result carries the document's `uuid`.
+AND-combined), `requested_fields` (projection; `_id`/`name`/`uuid` always included), `sort` + `sort_dir`,
+`offset`/`limit` (paging), and `max_length` (byte cap). Each list response includes `total`, `count`,
+`offset`, `limit`, and **`truncated`** (true if `max_length` dropped documents — page instead of trusting
+it). Single-gets take `_id` (preferred) or `name`. Every result carries the document's `uuid`.
 
 | Tool | Description |
 |------|-------------|
@@ -76,6 +79,12 @@ For documents that live inside a parent — journal **pages** (`JournalEntryPage
 | `create_embedded` | write | Add embedded docs to a parent (e.g. append a journal page, add actor items). |
 | `update_embedded` | write | Edit embedded docs in place (each update needs the embedded `_id`). |
 | `delete_embedded` | destructive | Delete embedded docs by `_id`. Permanent; bulk-limited. |
+
+The `embedded` name passes straight to Foundry, so any type works — including **map geometry** on a
+Scene (`"Wall"`, `"AmbientLight"`, `"Note"`, `"Tile"`, `"Drawing"`) and **timed `ActiveEffect`s** on an
+Actor/Item (`duration` in rounds/turns/seconds, `changes:[{key,mode,value}]`). See `INSTRUCTIONS.md`
+(*Embedded documents → Map geometry / Active Effects*) for the exact field shapes. Walls also have a
+convenience tool, `draw_walls`.
 
 ### Actors
 Generic actor operations (core APIs / capability-detected — no system schema baked in).
@@ -123,6 +132,7 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `update_token` | write | Move/hide/rename a token on a scene by `_id`. (Delete via `delete_embedded`, `embedded:"Token"`.) |
 | `update_scene` | write | Update a scene's environment/config (darkness, grid, weather, background); default active. |
 | `reset_fog` | write | Clear the fog of war / exploration on a scene. |
+| `draw_walls` | write | Add wall segments `{x1,y1,x2,y2, door?, ds?}` to a scene (default active) — blocking + doors. Lights/notes/tiles via `create_embedded`. |
 
 ### Dice & tables
 | Tool | Tier | Description |
@@ -169,6 +179,21 @@ these over generic `apply_damage` as they respect damage types and traits.
 | `pull_to_scene` | Pull all players' views to a scene. |
 | `ping_location` | Ping a point `(x,y)` on the active scene's canvas. |
 
+### Cards & decks · `write`
+| Tool | Description |
+|------|-------------|
+| `shuffle_cards` | Shuffle a card stack (deck) in place. |
+| `deal_cards` | Deal `number` cards from a deck to one or more hands/piles. |
+| `draw_cards` | Draw cards into a hand (`to`) from a deck/pile (`from`). |
+| `pass_cards` | Pass specific cards (by `_id`) from one stack to another. |
+| `reset_cards` | Recall all cards back to the deck (reset the stack). |
+
+### Game time · `write`
+| Tool | Description |
+|------|-------------|
+| `advance_time` | Advance (or rewind, with a negative value) the in-game world clock by `seconds`. |
+| `set_world_time` | Set the world clock to an absolute `worldTime` (seconds since the world epoch). |
+
 ### Macros · `destructive`
 | Tool | Description |
 |------|-------------|
@@ -192,6 +217,21 @@ npm run lint
 ```
 
 Credentials live in `packages/mcp-server/config/foundry_credentials.json` (gitignored).
+
+CI (`.github/workflows/ci.yml`) runs build + test + lint on every push and PR (Node 20).
+
+## Installing the Foundry module
+
+Install/update inside Foundry by manifest URL — **Setup → Add-on Modules → Install Module**, paste:
+
+```
+https://github.com/SpaceToast1738/foundry-bridge/releases/latest/download/module.json
+```
+
+Tagged releases (push a `v*` tag) are built and published by `.github/workflows/release.yml`, which
+attaches the module zip + `module.json` so Foundry can install and auto-update. For a manual build,
+`npm run dist` emits the installable module to `packages/foundry-module/dist/`. See `DEPLOY.md` for the
+full hosted setup.
 
 ## Desktop (stdio) usage
 

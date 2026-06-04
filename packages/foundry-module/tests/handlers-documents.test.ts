@@ -47,7 +47,7 @@ describe("handleDocumentsList", () => {
     expect(out.documents[0]).toEqual({ _id: "1", name: "a", level: 5 });
   });
 
-  it("truncates with max_length", () => {
+  it("truncates with max_length and flags truncated", () => {
     uninstall = installFakeGame({
       actors: Array.from({ length: 20 }, (_, i) => ({
         _id: String(i),
@@ -56,6 +56,54 @@ describe("handleDocumentsList", () => {
     });
     const out = handleDocumentsList({ collection: "actors", max_length: 200 });
     expect(out.count).toBeLessThan(20);
+    expect(out.total).toBe(20);
+    expect(out.truncated).toBe(true);
+  });
+
+  it("reports total and truncated=false when nothing is dropped", () => {
+    uninstall = installFakeGame({
+      actors: [
+        { _id: "1", name: "a" },
+        { _id: "2", name: "b" },
+      ],
+    });
+    const out = handleDocumentsList({ collection: "actors" });
+    expect(out.total).toBe(2);
+    expect(out.offset).toBe(0);
+    expect(out.limit).toBeNull();
+    expect(out.truncated).toBe(false);
+  });
+
+  it("sorts before paging", () => {
+    uninstall = installFakeGame({
+      actors: [
+        { _id: "1", name: "Charlie" },
+        { _id: "2", name: "alice" },
+        { _id: "3", name: "Bob" },
+      ],
+    });
+    const out = handleDocumentsList({ collection: "actors", sort: "name" });
+    expect(out.documents.map((d) => d.name)).toEqual(["alice", "Bob", "Charlie"]);
+  });
+
+  it("applies offset/limit window over the sorted set and keeps total", () => {
+    uninstall = installFakeGame({
+      actors: Array.from({ length: 10 }, (_, i) => ({
+        _id: String(i),
+        name: `actor-${String(i).padStart(2, "0")}`,
+      })),
+    });
+    const out = handleDocumentsList({
+      collection: "actors",
+      sort: "name",
+      offset: 3,
+      limit: 2,
+    });
+    expect(out.total).toBe(10);
+    expect(out.count).toBe(2);
+    expect(out.offset).toBe(3);
+    expect(out.limit).toBe(2);
+    expect(out.documents.map((d) => d.name)).toEqual(["actor-03", "actor-04"]);
   });
 
   it("calls toObject() if the document exposes one", () => {

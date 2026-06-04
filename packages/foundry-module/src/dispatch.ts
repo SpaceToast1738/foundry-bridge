@@ -46,6 +46,7 @@ import {
   handleSceneUpdate,
   handleTokenPlace,
   handleTokenUpdate,
+  handleWallsDraw,
 } from "./handlers/scenes.js";
 import {
   handleDiceRoll,
@@ -66,6 +67,15 @@ import {
   handlePresentShow,
 } from "./handlers/present.js";
 import { handleMacroExecute } from "./handlers/macro.js";
+import { handleStatusGet } from "./handlers/status.js";
+import {
+  handleCardsDeal,
+  handleCardsDraw,
+  handleCardsPass,
+  handleCardsReset,
+  handleCardsShuffle,
+} from "./handlers/cards.js";
+import { handleTimeAdvance, handleTimeSet } from "./handlers/time.js";
 import { handleFilesBrowse, handleFilesUpload } from "./handlers/files.js";
 import {
   handleActorApplyDamage,
@@ -217,6 +227,23 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleCombatRemove(params as Parameters<typeof handleCombatRemove>[0]),
   [Method.MACRO_EXECUTE]: (params) =>
     handleMacroExecute(params as Parameters<typeof handleMacroExecute>[0]),
+  [Method.STATUS_GET]: () => handleStatusGet(),
+  [Method.CARDS_DEAL]: (params) =>
+    handleCardsDeal(params as Parameters<typeof handleCardsDeal>[0]),
+  [Method.CARDS_DRAW]: (params) =>
+    handleCardsDraw(params as Parameters<typeof handleCardsDraw>[0]),
+  [Method.CARDS_SHUFFLE]: (params) =>
+    handleCardsShuffle(params as Parameters<typeof handleCardsShuffle>[0]),
+  [Method.CARDS_PASS]: (params) =>
+    handleCardsPass(params as Parameters<typeof handleCardsPass>[0]),
+  [Method.CARDS_RESET]: (params) =>
+    handleCardsReset(params as Parameters<typeof handleCardsReset>[0]),
+  [Method.TIME_ADVANCE]: (params) =>
+    handleTimeAdvance(params as Parameters<typeof handleTimeAdvance>[0]),
+  [Method.TIME_SET]: (params) =>
+    handleTimeSet(params as Parameters<typeof handleTimeSet>[0]),
+  [Method.WALLS_DRAW]: (params) =>
+    handleWallsDraw(params as Parameters<typeof handleWallsDraw>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

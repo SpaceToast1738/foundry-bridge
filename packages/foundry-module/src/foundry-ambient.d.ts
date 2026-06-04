@@ -51,6 +51,13 @@ declare global {
     readonly messages?: { contents: unknown[]; get(id: string): unknown };
     readonly socket?: { emit(...args: unknown[]): unknown };
     readonly packs?: { contents: unknown[]; get(id: string): unknown };
+    readonly modules?: {
+      get(id: string): { version?: string; active?: boolean } | undefined;
+    };
+    readonly time?: {
+      readonly worldTime: number;
+      advance(seconds: number): Promise<number> | number;
+    };
   }
 
   interface FoundryHooks {

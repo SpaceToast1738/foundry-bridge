@@ -3,6 +3,7 @@ import {
   ErrorCode,
   filterDocumentFields,
   filterDocumentsByWhere,
+  sortDocuments,
   truncateDocuments,
   type ParamsFor,
   Method,
@@ -20,7 +21,15 @@ import { assertBulkLimit, type PermissionState } from "../permissions.js";
 
 export function handleDocumentsList(
   params: ParamsFor<typeof Method.DOCUMENTS_LIST>,
-): { collection: string; count: number; documents: Record<string, unknown>[] } {
+): {
+  collection: string;
+  count: number;
+  total: number;
+  offset: number;
+  limit: number | null;
+  truncated: boolean;
+  documents: Record<string, unknown>[];
+} {
   if (!isReadableCollection(params.collection)) {
     throw new BridgeError(
       ErrorCode.BAD_REQUEST,
@@ -34,13 +43,30 @@ export function handleDocumentsList(
       `Collection '${params.collection}' is not loaded`,
     );
   }
+  // where -> sort -> count total -> offset/limit -> field projection -> max_length.
   let docs = collection.contents.map(docToObject);
   docs = filterDocumentsByWhere(docs, params.where);
+  docs = sortDocuments(docs, params.sort, params.sort_dir);
+  const total = docs.length;
+
+  const offset = params.offset ?? 0;
+  const limit = params.limit ?? null;
+  if (offset > 0 || limit !== null) {
+    docs = docs.slice(offset, limit === null ? undefined : offset + limit);
+  }
+
   docs = docs.map((d) => filterDocumentFields(d, params.requested_fields));
+  const afterPaging = docs.length;
   docs = truncateDocuments(docs, params.max_length);
+  const truncated = docs.length < afterPaging;
+
   return {
     collection: params.collection,
     count: docs.length,
+    total,
+    offset,
+    limit,
+    truncated,
     documents: docs,
   };
 }

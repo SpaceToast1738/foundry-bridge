@@ -35,16 +35,32 @@ Outputs:
 - `packages/mcp-server/build/server.js` — stdio MCP server
 - `packages/foundry-module/dist/{main.js,main.js.map,module.json}` — installable Foundry module
 
-Bundle the module dir into a zip for the Foundry install step:
+Bundle the module dir into a zip for the manual Foundry install step:
 
 ```bash
-( cd packages/foundry-module/dist && zip -r ../../../foundry-bridge-0.1.0.zip . )
+( cd packages/foundry-module/dist && zip -r ../../../foundry-bridge.zip . )
 ```
 
 ## 2. Install the Foundry module
 
-1. Copy `foundry-bridge-0.1.0.zip` to the VPS.
+**Option A — install/update by manifest URL (recommended).** Tagged releases are published by the
+`release.yml` GitHub Action (zip + `module.json` attached). In Foundry: **Setup → Add-on Modules →
+Install Module**, paste the manifest URL, Install:
+
+```
+https://github.com/SpaceToast1738/foundry-bridge/releases/latest/download/module.json
+```
+
+Foundry tracks this URL for updates, so future releases install with the normal **Update** button — no
+manual file copying. (Cut a release by pushing a tag: `git tag v0.2.0 && git push origin v0.2.0`.)
+
+**Option B — manual install (air-gapped / pre-release builds).**
+
+1. Copy `foundry-bridge.zip` to the VPS.
 2. Unzip into Foundry's modules dir (path depends on your install — typical: `/home/foundry/foundryuserdata/Data/modules/foundry-bridge/`).
+
+Either way, then:
+
 3. In the world, enable the module under **Game Settings → Manage Modules → Foundry Bridge**.
 4. Open **Game Settings → Configure Settings → Module Settings** and verify the defaults: relay URL `ws://127.0.0.1:31414`, write tier on, destructive tier OFF.
 
@@ -150,7 +166,7 @@ curl -s -X POST https://foundry-mcp.spencer-net.com/ \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/list"}'
 ```
 
-You should see the v1 tool list (~20 tools) come back as JSON-RPC. If you get `Unauthorized` the bearer is wrong; if you get `502/503` check Caddy → supergateway → MCP server → relay → browser in order via `journalctl -u`.
+You should see the tool list (~88 tools) come back as JSON-RPC. If you get `Unauthorized` the bearer is wrong; if you get `502/503` check Caddy → supergateway → MCP server → relay → browser in order via `journalctl -u`.
 
 For an end-to-end check that matches the headline goal from the handoff, point an MCP client at the URL+token and:
 
