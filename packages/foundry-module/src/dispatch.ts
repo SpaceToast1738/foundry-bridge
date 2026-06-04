@@ -40,8 +40,12 @@ import {
 } from "./handlers/folders.js";
 import { handleMessagesCreate, handleMessagesList } from "./handlers/messages.js";
 import {
+  handleDoorToggle,
+  handleLightPlace,
+  handleNotePlace,
   handleSceneActivate,
   handleSceneActive,
+  handleSceneCreate,
   handleSceneResetFog,
   handleSceneUpdate,
   handleTokenPlace,
@@ -244,6 +248,14 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleTimeSet(params as Parameters<typeof handleTimeSet>[0]),
   [Method.WALLS_DRAW]: (params) =>
     handleWallsDraw(params as Parameters<typeof handleWallsDraw>[0]),
+  [Method.SCENE_CREATE]: (params) =>
+    handleSceneCreate(params as Parameters<typeof handleSceneCreate>[0]),
+  [Method.DOOR_TOGGLE]: (params) =>
+    handleDoorToggle(params as Parameters<typeof handleDoorToggle>[0]),
+  [Method.LIGHT_PLACE]: (params) =>
+    handleLightPlace(params as Parameters<typeof handleLightPlace>[0]),
+  [Method.NOTE_PLACE]: (params) =>
+    handleNotePlace(params as Parameters<typeof handleNotePlace>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

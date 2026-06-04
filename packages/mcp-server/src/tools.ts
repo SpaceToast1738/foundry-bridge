@@ -1099,6 +1099,77 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "create_scene",
+    description:
+      "Create a placeable-ready scene with sane defaults (grid + dimensions) so you can immediately add walls/tokens/lights without it stalling. Optional `background` (image path), `grid_size`/`grid_type`, `padding`, and `activate` (make it the active/viewed scene).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        width: { type: "integer", description: "Scene width in pixels (default 4000)." },
+        height: { type: "integer", description: "Scene height in pixels (default 3000)." },
+        grid_size: { type: "integer", description: "Grid square size in pixels (default 100, min 50)." },
+        grid_type: { type: "integer", description: "0 gridless, 1 square (default), 2-5 hex variants." },
+        padding: { type: "number", description: "Edge padding fraction 0–0.5 (default 0.25)." },
+        background: { type: "string", description: "Background image path." },
+        activate: { type: "boolean", description: "Activate (view) the scene after creating it." },
+      },
+      required: ["name"],
+    },
+  });
+
+  tools.push({
+    name: "toggle_door",
+    description:
+      "Open/close/lock a wall that is a door. `wall_id` is the Wall _id; `state` 0 closed, 1 open, 2 locked (omit to flip open↔closed). Defaults to the active scene.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene: docRefSchema,
+        wall_id: { type: "string", description: "Wall document _id (must be a door)." },
+        state: { type: "integer", enum: [0, 1, 2], description: "0 closed, 1 open, 2 locked." },
+      },
+      required: ["wall_id"],
+    },
+  });
+
+  tools.push({
+    name: "place_light",
+    description:
+      "Place an ambient light at pixel (x, y) on a scene (default active). `dim`/`bright` radii (scene units), `color` like \"#ffaa33\". Convenience over create_embedded \"AmbientLight\".",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene: docRefSchema,
+        x: { type: "number" },
+        y: { type: "number" },
+        dim: { type: "number", description: "Dim light radius." },
+        bright: { type: "number", description: "Bright light radius." },
+        color: { type: "string", description: "Light color, e.g. \"#ffaa33\"." },
+      },
+      required: ["x", "y"],
+    },
+  });
+
+  tools.push({
+    name: "place_note",
+    description:
+      "Drop a map note pin at (x, y) linking a journal entry (`journal` ref). Optional `text` label + `icon_size`. Default active scene. Convenience over create_embedded \"Note\".",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene: docRefSchema,
+        x: { type: "number" },
+        y: { type: "number" },
+        journal: docRefSchema,
+        text: { type: "string", description: "Label shown on the pin." },
+        icon_size: { type: "integer", description: "Pin icon size in pixels." },
+      },
+      required: ["x", "y", "journal"],
+    },
+  });
+
+  tools.push({
     name: "show_credentials",
     description:
       "List the Foundry credentials this bridge is configured with. Passwords are never returned.",
@@ -1238,6 +1309,14 @@ export async function dispatchTool(
       return ctx.relay.call(Method.TIME_SET, params);
     case "draw_walls":
       return ctx.relay.call(Method.WALLS_DRAW, params);
+    case "create_scene":
+      return ctx.relay.call(Method.SCENE_CREATE, params);
+    case "toggle_door":
+      return ctx.relay.call(Method.DOOR_TOGGLE, params);
+    case "place_light":
+      return ctx.relay.call(Method.LIGHT_PLACE, params);
+    case "place_note":
+      return ctx.relay.call(Method.NOTE_PLACE, params);
     case "post_chat_message":
       return ctx.relay.call(Method.MESSAGES_CREATE, params);
     case "get_active_scene":

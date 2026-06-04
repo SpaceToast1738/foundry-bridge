@@ -68,6 +68,10 @@ export const Method = {
   TIME_ADVANCE: "time.advance",
   TIME_SET: "time.set",
   WALLS_DRAW: "scene.draw_walls",
+  SCENE_CREATE: "scene.create",
+  DOOR_TOGGLE: "scene.toggle_door",
+  LIGHT_PLACE: "scene.place_light",
+  NOTE_PLACE: "scene.place_note",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -140,6 +144,10 @@ export const methodSchema = z.enum([
   Method.TIME_ADVANCE,
   Method.TIME_SET,
   Method.WALLS_DRAW,
+  Method.SCENE_CREATE,
+  Method.DOOR_TOGGLE,
+  Method.LIGHT_PLACE,
+  Method.NOTE_PLACE,
 ]);
 
 export const PermissionTier = {
@@ -215,6 +223,10 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.TIME_ADVANCE]: PermissionTier.WRITE,
   [Method.TIME_SET]: PermissionTier.WRITE,
   [Method.WALLS_DRAW]: PermissionTier.WRITE,
+  [Method.SCENE_CREATE]: PermissionTier.WRITE,
+  [Method.DOOR_TOGGLE]: PermissionTier.WRITE,
+  [Method.LIGHT_PLACE]: PermissionTier.WRITE,
+  [Method.NOTE_PLACE]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.MACRO_EXECUTE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
@@ -531,6 +543,37 @@ export const paramSchemas = {
         }),
       )
       .min(1),
+  }),
+  [Method.SCENE_CREATE]: z.object({
+    name: z.string().min(1),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+    grid_size: z.number().int().positive().optional(),
+    grid_type: z.number().int().min(0).max(5).optional(),
+    padding: z.number().min(0).max(0.5).optional(),
+    background: z.string().min(1).optional(),
+    activate: z.boolean().optional(),
+  }),
+  [Method.DOOR_TOGGLE]: z.object({
+    scene: docRefSchema.optional(),
+    wall_id: z.string().min(1),
+    state: z.number().int().min(0).max(2).optional(),
+  }),
+  [Method.LIGHT_PLACE]: z.object({
+    scene: docRefSchema.optional(),
+    x: z.number(),
+    y: z.number(),
+    dim: z.number().nonnegative().optional(),
+    bright: z.number().nonnegative().optional(),
+    color: z.string().min(1).optional(),
+  }),
+  [Method.NOTE_PLACE]: z.object({
+    scene: docRefSchema.optional(),
+    x: z.number(),
+    y: z.number(),
+    journal: docRefSchema,
+    text: z.string().min(1).optional(),
+    icon_size: z.number().int().positive().optional(),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

@@ -11,6 +11,7 @@ import {
   docToObject,
   findInCollection,
   getCollection,
+  getDocumentClass,
 } from "../collections.js";
 
 interface SceneDoc {
@@ -19,6 +20,7 @@ interface SceneDoc {
   width?: number;
   height?: number;
   tokens?: { size?: number; contents?: unknown[] };
+  walls?: { get?: (id: string) => { ds?: number } | undefined };
   activate(): Promise<unknown>;
   update(data: Record<string, unknown>): Promise<unknown>;
   resetFog?: () => Promise<unknown>;
@@ -180,6 +182,105 @@ export async function handleWallsDraw(
     created: created.length,
     walls: created.map(docToObject),
   };
+}
+
+export async function handleSceneCreate(
+  params: ParamsFor<typeof Method.SCENE_CREATE>,
+): Promise<Record<string, unknown>> {
+  const cls = getDocumentClass("Scene");
+  if (!cls) {
+    throw new BridgeError(ErrorCode.UNAVAILABLE, "Scene document class is not loaded");
+  }
+  // Defaults produce a placeable-READY scene (real grid/dimensions) so the
+  // common "create scene then add walls/tokens" flow doesn't hang on a
+  // half-initialized scene.
+  const data: Record<string, unknown> = {
+    name: params.name,
+    width: params.width ?? 4000,
+    height: params.height ?? 3000,
+    padding: params.padding ?? 0.25,
+    grid: { type: params.grid_type ?? 1, size: params.grid_size ?? 100 },
+  };
+  if (params.background) data.background = { src: params.background };
+  const created = await cls.createDocuments([data]);
+  if (!created.length) {
+    throw new BridgeError(ErrorCode.INTERNAL, "Scene creation returned nothing");
+  }
+  const scene = created[0] as SceneDoc;
+  if (params.activate) {
+    await withTimeout(
+      Promise.resolve(scene.activate()),
+      Timeout.ACTIVATE,
+      `Activating new scene '${scene.name ?? scene.id}' did not complete (headless canvas). ` +
+        "The scene was created; don't blindly retry.",
+    );
+  }
+  return sceneDescriptor(scene, scene === getActiveScene());
+}
+
+export async function handleDoorToggle(
+  params: ParamsFor<typeof Method.DOOR_TOGGLE>,
+): Promise<Record<string, unknown>> {
+  const scene = resolveScene(params.scene);
+  let ds = params.state;
+  if (ds === undefined) {
+    const wall = scene.walls?.get?.(params.wall_id);
+    const current = typeof wall?.ds === "number" ? wall.ds : 0;
+    ds = current === 1 ? 0 : 1; // flip open <-> closed
+  }
+  const updated = await scene.updateEmbeddedDocuments("Wall", [
+    { _id: params.wall_id, ds },
+  ]);
+  if (updated.length === 0) {
+    throw new BridgeError(
+      ErrorCode.NOT_FOUND,
+      `Wall ${params.wall_id} not found on the scene`,
+    );
+  }
+  return { scene: scene.id, wall: params.wall_id, ds };
+}
+
+export async function handleLightPlace(
+  params: ParamsFor<typeof Method.LIGHT_PLACE>,
+): Promise<Record<string, unknown>> {
+  const scene = resolveScene(params.scene);
+  const config: Record<string, unknown> = {};
+  if (params.dim !== undefined) config.dim = params.dim;
+  if (params.bright !== undefined) config.bright = params.bright;
+  if (params.color !== undefined) config.color = params.color;
+  const created = await withTimeout(
+    scene.createEmbeddedDocuments("AmbientLight", [{ x: params.x, y: params.y, config }]),
+    Timeout.PLACEABLE,
+    `Placing a light on scene '${scene.name ?? scene.id}' did not complete. Activate the target scene ` +
+      "first (placeables need the active/rendered scene). Don't blindly retry.",
+  );
+  return docToObject(created[0]);
+}
+
+export async function handleNotePlace(
+  params: ParamsFor<typeof Method.NOTE_PLACE>,
+): Promise<Record<string, unknown>> {
+  const scene = resolveScene(params.scene);
+  const journals = getCollection("journal");
+  const journal = journals && findInCollection(journals, params.journal);
+  if (!journal) {
+    throw new BridgeError(
+      ErrorCode.NOT_FOUND,
+      `Journal not found by ref ${JSON.stringify(params.journal)}`,
+    );
+  }
+  const j = journal as { id?: string; _id?: string };
+  const entryId = j.id ?? j._id;
+  const data: Record<string, unknown> = { x: params.x, y: params.y, entryId };
+  if (params.text !== undefined) data.text = params.text;
+  if (params.icon_size !== undefined) data.iconSize = params.icon_size;
+  const created = await withTimeout(
+    scene.createEmbeddedDocuments("Note", [data]),
+    Timeout.PLACEABLE,
+    `Placing a map note on scene '${scene.name ?? scene.id}' did not complete. Activate the target ` +
+      "scene first. Don't blindly retry.",
+  );
+  return docToObject(created[0]);
 }
 
 export async function handleTokenUpdate(
