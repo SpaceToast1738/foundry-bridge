@@ -36,6 +36,40 @@ interface Dnd5eActor {
   rollDeathSave?: (...args: unknown[]) => Promise<unknown>;
   concentration?: { effects?: { size?: number; contents?: unknown[] } };
   endConcentration?: (...args: unknown[]) => Promise<unknown>;
+  items?: { contents?: Dnd5eItem[]; get?: (id: string) => Dnd5eItem | undefined };
+}
+
+interface Dnd5eItem {
+  id?: string;
+  _id?: string;
+  name?: string;
+  use?: (...args: unknown[]) => Promise<unknown>;
+  rollAttack?: (...args: unknown[]) => Promise<unknown>;
+  rollDamage?: (...args: unknown[]) => Promise<unknown>;
+}
+
+function resolveItem(actor: Dnd5eActor, ref: DocRef): Dnd5eItem {
+  const items = actor.items;
+  const id = ref._id ?? ref.id;
+  const found =
+    (id && items?.get?.(id)) ||
+    (items?.contents ?? []).find((i) =>
+      id ? (i.id ?? i._id) === id : i.name === ref.name,
+    );
+  if (!found) {
+    throw new BridgeError(ErrorCode.NOT_FOUND, `Item not found on actor by ref ${JSON.stringify(ref)}`);
+  }
+  return found;
+}
+
+/** Invoke a dnd5e roll method headlessly: v4 (config, dialog, message) with a
+ * v3 ({fastForward, chatMessage}) fallback — same shape as handleDnd5eRoll. */
+async function invokeHeadless(fn: (...args: unknown[]) => Promise<unknown>): Promise<unknown> {
+  try {
+    return await fn({}, { configure: false }, { create: false });
+  } catch {
+    return await fn({ fastForward: true, chatMessage: false });
+  }
 }
 
 /** Read a (possibly dotted) path off the actor's `system` object. */
@@ -337,4 +371,40 @@ export async function handleDnd5eConcentration(
   }
   await actor.endConcentration();
   return { actor: actor.id, concentrating: false, broke: count };
+}
+
+export async function handleDnd5eUseItem(
+  params: ParamsFor<typeof Method.DND5E_USE_ITEM>,
+): Promise<Record<string, unknown>> {
+  assertDnd5e();
+  const actor = resolveActor(params.actor);
+  const item = resolveItem(actor, params.item);
+  if (typeof item.use !== "function") {
+    throw new BridgeError(ErrorCode.UNAVAILABLE, "This item/dnd5e version does not support use()");
+  }
+  // Headless: suppress the use dialog and the chat card.
+  try {
+    await item.use({}, { configure: false }, { create: false });
+  } catch {
+    await item.use({ configureDialog: false, createMessage: false });
+  }
+  return { actor: actor.id, item: item.id ?? item._id, used: true };
+}
+
+export async function handleDnd5eItemRoll(
+  params: ParamsFor<typeof Method.DND5E_ITEM_ROLL>,
+): Promise<Record<string, unknown>> {
+  assertDnd5e();
+  const actor = resolveActor(params.actor);
+  const item = resolveItem(actor, params.item);
+  const fn = params.kind === "attack" ? item.rollAttack : item.rollDamage;
+  if (typeof fn !== "function") {
+    throw new BridgeError(
+      ErrorCode.UNAVAILABLE,
+      `This item/dnd5e version does not expose roll${params.kind === "attack" ? "Attack" : "Damage"}(); ` +
+        "newer dnd5e routes rolls through item Activities — use dnd5e_use_item instead",
+    );
+  }
+  const result = await invokeHeadless(fn.bind(item));
+  return { actor: actor.id, item: item.id ?? item._id, kind: params.kind, total: rollTotal(result) ?? null };
 }

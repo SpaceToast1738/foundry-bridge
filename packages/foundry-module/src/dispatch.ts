@@ -107,9 +107,11 @@ import {
   handleDnd5eCurrency,
   handleDnd5eDeathSaves,
   handleDnd5eHitDice,
+  handleDnd5eItemRoll,
   handleDnd5eRest,
   handleDnd5eRoll,
   handleDnd5eSpellSlots,
+  handleDnd5eUseItem,
 } from "./systems/dnd5e.js";
 
 export type Handler = (
@@ -287,6 +289,10 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleDnd5eDeathSaves(params as Parameters<typeof handleDnd5eDeathSaves>[0]),
   [Method.DND5E_CONCENTRATION]: (params) =>
     handleDnd5eConcentration(params as Parameters<typeof handleDnd5eConcentration>[0]),
+  [Method.DND5E_USE_ITEM]: (params) =>
+    handleDnd5eUseItem(params as Parameters<typeof handleDnd5eUseItem>[0]),
+  [Method.DND5E_ITEM_ROLL]: (params) =>
+    handleDnd5eItemRoll(params as Parameters<typeof handleDnd5eItemRoll>[0]),
   [Method.PLAYLIST_CREATE]: (params) =>
     handlePlaylistCreate(params as Parameters<typeof handlePlaylistCreate>[0]),
   [Method.PLAYLIST_ADD_SOUNDS]: (params) =>

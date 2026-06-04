@@ -7,8 +7,12 @@ describe("handleDocumentsSearch", () => {
   beforeEach(() => {
     restore = installFakeGame({
       actors: [
-        { _id: "a1", name: "Goblin Scout" },
-        { _id: "a2", name: "Town Guard" },
+        { _id: "a1", name: "Goblin Scout", type: "npc" },
+        { _id: "a2", name: "Town Guard", type: "character" },
+      ],
+      items: [
+        { _id: "i1", name: "Fireball", type: "spell", system: { description: { value: "<p>A bright streak flashes toward a point you choose</p>" } } },
+        { _id: "i2", name: "Longsword", type: "weapon" },
       ],
       journal: [
         {
@@ -56,5 +60,22 @@ describe("handleDocumentsSearch", () => {
 
   it("rejects an unknown collection", () => {
     expect(() => handleDocumentsSearch({ query: "x", collections: ["nope"] })).toThrow();
+  });
+
+  it("filters by document type", () => {
+    const res = handleDocumentsSearch({ query: "o", collections: ["actors"], type: "npc" });
+    expect(res.results.every((r) => r._id === "a1")).toBe(true);
+    expect(res.count).toBe(1);
+  });
+
+  it("matches inside match_fields and returns a field snippet", () => {
+    const res = handleDocumentsSearch({
+      query: "bright streak",
+      collections: ["items"],
+      match_fields: ["system.description.value"],
+    });
+    expect(res.count).toBe(1);
+    expect(res.results[0]._id).toBe("i1");
+    expect(res.results[0].snippet).toMatch(/system\.description\.value: .*bright streak/);
   });
 });

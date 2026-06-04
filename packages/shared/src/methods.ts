@@ -80,6 +80,8 @@ export const Method = {
   DND5E_HIT_DICE: "dnd5e.hit_dice",
   DND5E_DEATH_SAVES: "dnd5e.death_saves",
   DND5E_CONCENTRATION: "dnd5e.concentration",
+  DND5E_USE_ITEM: "dnd5e.use_item",
+  DND5E_ITEM_ROLL: "dnd5e.item_roll",
   PLAYLIST_CREATE: "playlist.create",
   PLAYLIST_ADD_SOUNDS: "playlist.add_sounds",
   COMBATANT_DAMAGE: "combat.damage_combatant",
@@ -169,6 +171,8 @@ export const methodSchema = z.enum([
   Method.DND5E_HIT_DICE,
   Method.DND5E_DEATH_SAVES,
   Method.DND5E_CONCENTRATION,
+  Method.DND5E_USE_ITEM,
+  Method.DND5E_ITEM_ROLL,
   Method.PLAYLIST_CREATE,
   Method.PLAYLIST_ADD_SOUNDS,
   Method.COMBATANT_DAMAGE,
@@ -261,6 +265,8 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.DND5E_HIT_DICE]: PermissionTier.WRITE,
   [Method.DND5E_DEATH_SAVES]: PermissionTier.WRITE,
   [Method.DND5E_CONCENTRATION]: PermissionTier.WRITE,
+  [Method.DND5E_USE_ITEM]: PermissionTier.WRITE,
+  [Method.DND5E_ITEM_ROLL]: PermissionTier.WRITE,
   [Method.PLAYLIST_CREATE]: PermissionTier.WRITE,
   [Method.PLAYLIST_ADD_SOUNDS]: PermissionTier.WRITE,
   [Method.COMBATANT_DAMAGE]: PermissionTier.WRITE,
@@ -310,6 +316,8 @@ export const paramSchemas = {
   [Method.DOCUMENTS_SEARCH]: z.object({
     query: z.string().min(1),
     collections: z.array(z.string().min(1)).optional(),
+    type: z.string().min(1).optional(),
+    match_fields: z.array(z.string().min(1)).optional(),
     include_text: z.boolean().optional(),
     limit: z.number().int().positive().optional(),
   }),
@@ -670,6 +678,15 @@ export const paramSchemas = {
   [Method.DND5E_CONCENTRATION]: z.object({
     actor: docRefSchema,
     action: z.enum(["check", "break"]),
+  }),
+  [Method.DND5E_USE_ITEM]: z.object({
+    actor: docRefSchema,
+    item: docRefSchema,
+  }),
+  [Method.DND5E_ITEM_ROLL]: z.object({
+    actor: docRefSchema,
+    item: docRefSchema,
+    kind: z.enum(["attack", "damage"]),
   }),
   [Method.PLAYLIST_CREATE]: z.object({
     name: z.string().min(1),

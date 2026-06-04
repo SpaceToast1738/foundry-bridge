@@ -170,6 +170,16 @@ export function buildToolDefinitions(): ToolDef[] {
           description:
             "Collections to search (e.g. [\"journal\",\"actors\"]). Defaults to all readable collections.",
         },
+        type: {
+          type: "string",
+          description: "Only match documents whose `type` equals this (e.g. \"npc\", \"weapon\", \"spell\").",
+        },
+        match_fields: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Also match the query inside these (dotted) string fields, e.g. [\"system.description.value\"]. Hits include a field snippet.",
+        },
         include_text: {
           type: "boolean",
           description: "Search journal page text in addition to names. Default true.",
@@ -1035,6 +1045,32 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "dnd5e_use_item",
+    description:
+      "[D&D 5e] Use an item the actor owns (weapon attack, spell cast, consumable, feature) by item `_id`/`name`. Runs the item's full use flow (consumes uses/slots) headlessly — no dialog. Prefer this on newer dnd5e where rolls live in item Activities.",
+    inputSchema: {
+      type: "object",
+      properties: { actor: docRefSchema, item: docRefSchema },
+      required: ["actor", "item"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_item_roll",
+    description:
+      "[D&D 5e] Roll just an `attack` or `damage` for an owned item (by `_id`/`name`); returns the total. UNAVAILABLE on dnd5e versions that route rolls through Activities — use dnd5e_use_item then.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        item: docRefSchema,
+        kind: { type: "string", enum: ["attack", "damage"] },
+      },
+      required: ["actor", "item", "kind"],
+    },
+  });
+
+  tools.push({
     name: "show_to_players",
     description:
       "Show content to all players: an `image` (path → popout on everyone's screen) or a `journal` (by `_id`/`name`). Optional `title`.",
@@ -1488,6 +1524,10 @@ export async function dispatchTool(
       return ctx.relay.call(Method.DND5E_DEATH_SAVES, params);
     case "dnd5e_concentration":
       return ctx.relay.call(Method.DND5E_CONCENTRATION, params);
+    case "dnd5e_use_item":
+      return ctx.relay.call(Method.DND5E_USE_ITEM, params);
+    case "dnd5e_item_roll":
+      return ctx.relay.call(Method.DND5E_ITEM_ROLL, params);
     case "create_table":
       return ctx.relay.call(Method.TABLE_CREATE, params);
     case "add_table_results":

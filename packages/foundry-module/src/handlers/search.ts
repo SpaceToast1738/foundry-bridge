@@ -56,6 +56,17 @@ function makeSnippet(text: string, matchIndex: number, queryLen: number): string
   return prefix + text.slice(start, end).trim() + suffix;
 }
 
+/** Read a (possibly dotted) field path off a serialized doc. */
+function valueAtPath(obj: Record<string, unknown>, path: string): unknown {
+  if (path in obj) return obj[path];
+  let cur: unknown = obj;
+  for (const seg of path.split(".")) {
+    if (cur === null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return cur;
+}
+
 export function handleDocumentsSearch(
   params: ParamsFor<typeof Method.DOCUMENTS_SEARCH>,
 ): { query: string; count: number; results: SearchHit[] } {
@@ -76,6 +87,8 @@ export function handleDocumentsSearch(
   const includeText = params.include_text !== false;
   const limit = params.limit ?? DEFAULT_LIMIT;
   const needle = params.query.toLowerCase();
+  const typeFilter = params.type;
+  const matchFields = params.match_fields ?? [];
   const results: SearchHit[] = [];
 
   for (const name of targets) {
@@ -84,12 +97,31 @@ export function handleDocumentsSearch(
     for (const raw of collection.contents) {
       if (results.length >= limit) break;
       const obj = docToObject(raw);
+      if (typeFilter && obj.type !== typeFilter) continue;
       const docName = typeof obj.name === "string" ? obj.name : "";
 
       if (docName.toLowerCase().includes(needle)) {
         results.push({ collection: name, _id: obj._id, name: obj.name, uuid: obj.uuid });
         continue;
       }
+
+      // Optional: also match the query within explicit (dotted) string fields.
+      let fieldHit = false;
+      for (const field of matchFields) {
+        const v = valueAtPath(obj, field);
+        if (typeof v === "string" && v.toLowerCase().includes(needle)) {
+          results.push({
+            collection: name,
+            _id: obj._id,
+            name: obj.name,
+            uuid: obj.uuid,
+            snippet: `${field}: ${makeSnippet(v, v.toLowerCase().indexOf(needle), needle.length)}`,
+          });
+          fieldHit = true;
+          break;
+        }
+      }
+      if (fieldHit) continue;
 
       if (includeText && name === "journal") {
         const text = journalText(obj);

@@ -7,9 +7,11 @@ import {
   handleDnd5eCurrency,
   handleDnd5eDeathSaves,
   handleDnd5eHitDice,
+  handleDnd5eItemRoll,
   handleDnd5eRest,
   handleDnd5eRoll,
   handleDnd5eSpellSlots,
+  handleDnd5eUseItem,
 } from "../src/systems/dnd5e";
 import { installFakeGame, type FakeDoc } from "./helpers/fake-game";
 
@@ -174,5 +176,57 @@ describe("dnd5e depth (round 7)", () => {
     expect(chk).toMatchObject({ concentrating: true, count: 1 });
     const brk = await handleDnd5eConcentration({ actor: { _id: "pc" }, action: "break" });
     expect(brk).toMatchObject({ concentrating: false, broke: 1 });
+  });
+});
+
+describe("dnd5e item use / rolls", () => {
+  let restore: () => void;
+  let used: boolean;
+
+  function actorWithItem(): FakeDoc {
+    used = false;
+    const item = {
+      _id: "i1",
+      id: "i1",
+      name: "Longsword",
+      use: async () => {
+        used = true;
+        return { foo: 1 };
+      },
+      rollAttack: async () => ({ total: 18 }),
+      rollDamage: async () => ({ total: 9 }),
+    };
+    return {
+      _id: "pc",
+      id: "pc",
+      name: "Fighter",
+      system: {},
+      items: { contents: [item], get: (id: string) => (id === "i1" ? item : undefined) },
+      update: async () => undefined,
+    } as unknown as FakeDoc;
+  }
+
+  beforeEach(() => {
+    restore = installFakeGame({ actors: [actorWithItem()], system: { id: "dnd5e", version: "5.3.3" } });
+  });
+  afterEach(() => restore());
+
+  it("uses an item by name", async () => {
+    const r = await handleDnd5eUseItem({ actor: { _id: "pc" }, item: { name: "Longsword" } });
+    expect(r).toMatchObject({ item: "i1", used: true });
+    expect(used).toBe(true);
+  });
+
+  it("rolls an item attack and damage, returning totals", async () => {
+    const atk = await handleDnd5eItemRoll({ actor: { _id: "pc" }, item: { _id: "i1" }, kind: "attack" });
+    expect(atk).toMatchObject({ kind: "attack", total: 18 });
+    const dmg = await handleDnd5eItemRoll({ actor: { _id: "pc" }, item: { _id: "i1" }, kind: "damage" });
+    expect(dmg).toMatchObject({ kind: "damage", total: 9 });
+  });
+
+  it("NOT_FOUND for a missing item", async () => {
+    await expect(
+      handleDnd5eUseItem({ actor: { _id: "pc" }, item: { name: "Bow" } }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
