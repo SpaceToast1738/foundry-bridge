@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   BridgeError,
   ErrorCode,
@@ -8,6 +9,22 @@ import {
   type FoundryCredential,
 } from "./core/credentials.js";
 import type { Relay } from "./relay.js";
+
+/**
+ * Read the headless launcher's diagnostics file (best-effort). Lets get_status
+ * explain WHY the bridge is down — no world launched, wrong world, bridge user
+ * not a GM, login failed — even when the module isn't connected to the relay.
+ */
+export function readLauncherStatus(): Record<string, unknown> {
+  const path =
+    process.env.FOUNDRY_BRIDGE_LAUNCHER_STATUS ??
+    "/var/lib/foundry-bridge/launcher-status.json";
+  try {
+    return JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
+  } catch {
+    return { state: "unknown" };
+  }
+}
 
 interface ToolDef {
   name: string;
@@ -1196,12 +1213,14 @@ export async function dispatchTool(
       return ctx.relay.call(Method.MACRO_EXECUTE, params);
     case "get_status": {
       // Health tool: must answer even when no Foundry client is connected,
-      // so don't go through relay.call (which throws UNAVAILABLE).
+      // so don't go through relay.call (which throws UNAVAILABLE). Always attach
+      // the launcher diagnostics so the caller can see WHY it's down.
+      const launcher = readLauncherStatus();
       if (!ctx.relay.isConnected()) {
-        return { relayConnected: false };
+        return { relayConnected: false, launcher };
       }
       const status = (await ctx.relay.call(Method.STATUS_GET, {})) as Record<string, unknown>;
-      return { relayConnected: true, ...status };
+      return { relayConnected: true, ...status, launcher };
     }
     case "deal_cards":
       return ctx.relay.call(Method.CARDS_DEAL, params);

@@ -1,3 +1,6 @@
+import { writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { Method } from "@foundry-bridge/shared";
 import { buildToolDefinitions, dispatchTool, type ToolContext } from "../src/tools";
 import type { Relay } from "../src/relay";
@@ -181,5 +184,47 @@ describe("dispatchTool", () => {
     await expect(
       dispatchTool("get_compendium", {}, ctxWith(relay)),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("get_status", () => {
+  const statusPath = join(tmpdir(), `launcher-status-${process.pid}.json`);
+  const prevEnv = process.env.FOUNDRY_BRIDGE_LAUNCHER_STATUS;
+  beforeAll(() => {
+    process.env.FOUNDRY_BRIDGE_LAUNCHER_STATUS = statusPath;
+  });
+  afterAll(() => {
+    if (prevEnv === undefined) delete process.env.FOUNDRY_BRIDGE_LAUNCHER_STATUS;
+    else process.env.FOUNDRY_BRIDGE_LAUNCHER_STATUS = prevEnv;
+    try { rmSync(statusPath); } catch { /* ignore */ }
+  });
+
+  function ctxWithConn(connected: boolean): ToolContext {
+    const relay = {
+      isConnected: () => connected,
+      call: jest.fn(async () => ({ moduleVersion: "0.2.0", world: { title: "W" } })),
+    } as unknown as Relay;
+    return { relay, credentials: [], activeIndex: 0 };
+  }
+
+  it("surfaces launcher diagnostics when the module is NOT connected", async () => {
+    writeFileSync(statusPath, JSON.stringify({ state: "non_gm", currentWorld: "Driftworlds", isGM: false }));
+    const out = (await dispatchTool("get_status", {}, ctxWithConn(false))) as Record<string, unknown>;
+    expect(out.relayConnected).toBe(false);
+    expect(out.launcher).toMatchObject({ state: "non_gm", currentWorld: "Driftworlds", isGM: false });
+  });
+
+  it("includes module status AND launcher block when connected", async () => {
+    writeFileSync(statusPath, JSON.stringify({ state: "connected", currentWorld: "Driftworlds", isGM: true }));
+    const out = (await dispatchTool("get_status", {}, ctxWithConn(true))) as Record<string, unknown>;
+    expect(out.relayConnected).toBe(true);
+    expect(out.moduleVersion).toBe("0.2.0");
+    expect(out.launcher).toMatchObject({ state: "connected" });
+  });
+
+  it("returns state:unknown when no status file exists", async () => {
+    try { rmSync(statusPath); } catch { /* ignore */ }
+    const out = (await dispatchTool("get_status", {}, ctxWithConn(false))) as Record<string, unknown>;
+    expect(out.launcher).toMatchObject({ state: "unknown" });
   });
 });

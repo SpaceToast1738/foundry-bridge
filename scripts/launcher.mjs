@@ -11,9 +11,11 @@
  *   PLAYWRIGHT_USER_DATA_DIR           Chromium profile dir (default /var/lib/foundry-bridge/profile)
  *   FOUNDRY_BRIDGE_HEADLESS            "false" to launch headed for debugging (default true)
  *   FOUNDRY_BRIDGE_RELOAD_INTERVAL_MS  How often to verify the world is still loaded (default 60000)
+ *   FOUNDRY_BRIDGE_LAUNCHER_STATUS     Path to the diagnostics JSON the mcp-server's get_status reads
+ *                                      (default /var/lib/foundry-bridge/launcher-status.json)
  */
 import { chromium } from "playwright";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 const CREDENTIALS_PATH =
   process.env.FOUNDRY_CREDENTIALS ?? "/etc/foundry-bridge/credentials.json";
@@ -24,9 +26,46 @@ const HEADLESS = process.env.FOUNDRY_BRIDGE_HEADLESS !== "false";
 const RELOAD_INTERVAL_MS = Number(
   process.env.FOUNDRY_BRIDGE_RELOAD_INTERVAL_MS ?? 60_000,
 );
+// Diagnostics the mcp-server's get_status reads so the health tool can explain
+// WHY the bridge is down (no world / wrong world / non-GM / login fail) even
+// when the module isn't connected to the relay.
+const STATUS_PATH =
+  process.env.FOUNDRY_BRIDGE_LAUNCHER_STATUS ??
+  "/var/lib/foundry-bridge/launcher-status.json";
 
 function log(level, msg) {
   console.error(`[launcher][${level}] ${msg}`);
+}
+
+const status = {
+  state: "starting",
+  lastError: null,
+  currentWorld: null,
+  username: null,
+  isGM: null,
+  availableUsers: null,
+};
+
+/** Merge a partial update into the launcher status and persist it (best-effort). */
+function writeStatus(partial) {
+  Object.assign(status, partial, { ts: Date.now() });
+  try {
+    writeFileSync(STATUS_PATH, JSON.stringify(status, null, 2));
+  } catch (err) {
+    log("warn", `could not write status file ${STATUS_PATH}: ${err.message}`);
+  }
+}
+
+/** Read the live world title + GM flag from the page (best-effort). */
+async function readGameInfo(page) {
+  try {
+    return await page.evaluate(() => ({
+      currentWorld: globalThis.game?.world?.title ?? null,
+      isGM: Boolean(globalThis.game?.user?.isGM),
+    }));
+  } catch {
+    return {};
+  }
 }
 
 function loadActiveCredential() {
@@ -100,9 +139,10 @@ async function joinWorld(page, cred) {
     await userSelect.waitFor({ state: "attached", timeout: 15_000 });
   } catch {
     log("warn", `select[name="userid"] never rendered on /join (15s)`);
-    throw new Error(
-      "Foundry /join form did not expose a userid select (world may not be running, or selector changed)",
-    );
+    const msg =
+      "Foundry /join form did not expose a userid select (world may not be running, or selector changed)";
+    writeStatus({ state: "no_world", lastError: msg, currentWorld: null, isGM: null });
+    throw new Error(msg);
   }
   // Enumerate the dropdown up front so we can match by display name (stable
   // across worlds) and, on a miss, say exactly which users *are* available —
@@ -115,10 +155,12 @@ async function joinWorld(page, cred) {
         .filter((o) => o.value),
     );
   let chosen;
+  let chosenName;
   for (const name of cred.usernames) {
     const match = options.find((o) => o.label === name);
     if (match) {
       chosen = match.value;
+      chosenName = name;
       log("info", `matched bridge user by name '${name}'`);
       break;
     }
@@ -138,13 +180,23 @@ async function joinWorld(page, cred) {
       "error",
       `bridge user ${want} not found in the launched world; available users: ${JSON.stringify(options)}`,
     );
+    const available = options.map((o) => o.label).filter(Boolean);
+    const info = await readGameInfo(page);
+    writeStatus({
+      state: "login_failed",
+      lastError: `Configured bridge user (${want}) is not in the launched world.`,
+      availableUsers: available,
+      currentWorld: info.currentWorld ?? null,
+      isGM: null,
+    });
     throw new Error(
       `Configured bridge user (${want}) is not in the launched world. ` +
-        `Available: ${options.map((o) => o.label).join(", ") || "(none — is a world launched?)"}. ` +
+        `Available: ${available.join(", ") || "(none — is a world launched?)"}. ` +
         "Create a GM user with one of those names in every world you want the bridge to manage.",
     );
   }
   await userSelect.selectOption(chosen);
+  writeStatus({ state: "joining", username: chosenName ?? null, lastError: null });
 
   const passwordField = page.locator('input[name="password"]');
   if (await passwordField.count()) {
@@ -176,6 +228,7 @@ async function waitForBridgeReady(page) {
 }
 
 async function main() {
+  writeStatus({ state: "starting" });
   const cred = loadActiveCredential();
   const matchBy = cred.usernames.length
     ? `username(s) ${cred.usernames.join("/")}`
@@ -206,6 +259,21 @@ async function main() {
     const text = msg.text();
     if (text.startsWith("[foundry-bridge]")) {
       log("module", text);
+      // The module's own ready hook tells us GM vs non-GM; reflect it in status.
+      if (text.includes("connected")) {
+        void readGameInfo(page).then((info) =>
+          writeStatus({ state: "connected", isGM: true, lastError: null, ...info }),
+        );
+      } else if (text.includes("non-GM")) {
+        void readGameInfo(page).then((info) =>
+          writeStatus({
+            state: "non_gm",
+            isGM: false,
+            lastError: "Bridge user is not a GM in this world; the module disabled itself.",
+            ...info,
+          }),
+        );
+      }
     } else if (msg.type() === "error") {
       log("page-error", text.slice(0, 300));
     }
@@ -257,5 +325,10 @@ async function main() {
 
 main().catch((err) => {
   console.error("[launcher][fatal]", err);
+  // Preserve a specific state already recorded by joinWorld (no_world /
+  // login_failed); otherwise mark a generic error.
+  if (!["no_world", "login_failed"].includes(status.state)) {
+    writeStatus({ state: "error", lastError: String(err?.message ?? err) });
+  }
   process.exit(1);
 });
