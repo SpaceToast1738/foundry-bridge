@@ -2,6 +2,8 @@ import {
   BridgeError,
   ErrorCode,
   Method,
+  Timeout,
+  withTimeout,
   type ParamsFor,
 } from "@foundry-bridge/shared";
 import {
@@ -28,31 +30,6 @@ interface ActorDoc {
   getTokenDocument(
     data?: Record<string, unknown>,
   ): Promise<{ toObject(): Record<string, unknown> }>;
-}
-
-/** Time budget for a scene placeable write before we surface a clear error
- * instead of letting the relay's 30s timeout fire with no explanation. */
-export const PLACEABLE_TIMEOUT_MS = 20_000;
-
-/**
- * Race a promise against a timeout so a wedged Foundry operation reports an
- * actionable error rather than an opaque hang. The underlying promise is left
- * to settle on its own (we can't cancel it) — we just stop waiting.
- */
-export async function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  message: string,
-): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new BridgeError(ErrorCode.TIMEOUT, message)), ms);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
 }
 
 function tokenCount(scene: SceneDoc): number {
@@ -112,7 +89,12 @@ export async function handleSceneActivate(
   params: ParamsFor<typeof Method.SCENE_ACTIVATE>,
 ): Promise<Record<string, unknown>> {
   const scene = resolveScene(params.ref);
-  await scene.activate();
+  await withTimeout(
+    Promise.resolve(scene.activate()),
+    Timeout.ACTIVATE,
+    `Activating scene '${scene.name ?? scene.id}' did not complete — the headless client's canvas may ` +
+      "be unavailable (e.g. no scene was ever rendered). Check get_status; don't blindly retry.",
+  );
   return sceneDescriptor(scene, true);
 }
 
@@ -143,7 +125,7 @@ export async function handleTokenPlace(
   const tokenDoc = await actor.getTokenDocument(overrides);
   const created = await withTimeout(
     scene.createEmbeddedDocuments("Token", [tokenDoc.toObject()]),
-    PLACEABLE_TIMEOUT_MS,
+    Timeout.PLACEABLE,
     `Placing a token on scene '${scene.name ?? scene.id}' did not complete. In the hosted ` +
       "(headless) bridge, tokens should be placed on the active/rendered scene — activate it " +
       "first with activate_scene, and make sure it has a valid grid/dimensions. Do not blindly retry.",
@@ -187,7 +169,7 @@ export async function handleWallsDraw(
   });
   const created = await withTimeout(
     scene.createEmbeddedDocuments("Wall", wallData),
-    PLACEABLE_TIMEOUT_MS,
+    Timeout.PLACEABLE,
     `Creating walls on scene '${scene.name ?? scene.id}' did not complete. In the hosted ` +
       "(headless) bridge, scene placeables should be created on the active/rendered scene — " +
       "activate it first with activate_scene, and make sure it has a valid grid/dimensions. " +

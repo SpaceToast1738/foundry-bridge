@@ -2,6 +2,8 @@ import {
   BridgeError,
   ErrorCode,
   Method,
+  Timeout,
+  withTimeout,
   type ParamsFor,
 } from "@foundry-bridge/shared";
 import { findInCollection, getCollection } from "../collections.js";
@@ -47,7 +49,11 @@ export async function handlePresentShow(
       "This Foundry version doesn't expose JournalEntry#show(); share an image instead",
     );
   }
-  await doc.show();
+  await withTimeout(
+    Promise.resolve(doc.show()),
+    Timeout.PRESENT,
+    "Showing the journal to players did not complete (headless render may have stalled). Don't blindly retry.",
+  );
   return { shown: "journal", journal: doc.id };
 }
 

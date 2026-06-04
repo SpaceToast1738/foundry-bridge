@@ -2,6 +2,8 @@ import {
   BridgeError,
   ErrorCode,
   Method,
+  Timeout,
+  withTimeout,
   type ParamsFor,
 } from "@foundry-bridge/shared";
 import {
@@ -41,7 +43,11 @@ export async function handlePlaylistPlay(
   params: ParamsFor<typeof Method.PLAYLIST_PLAY>,
 ): Promise<Record<string, unknown>> {
   const pl = resolvePlaylist(params.playlist);
-  await pl.playAll();
+  await withTimeout(
+    Promise.resolve(pl.playAll()),
+    Timeout.AUDIO,
+    `Starting playlist '${pl.name ?? pl.id}' did not complete. Don't blindly retry.`,
+  );
   return { playlist: pl.id, playing: true };
 }
 
@@ -49,7 +55,11 @@ export async function handlePlaylistStop(
   params: ParamsFor<typeof Method.PLAYLIST_STOP>,
 ): Promise<Record<string, unknown>> {
   const pl = resolvePlaylist(params.playlist);
-  await pl.stopAll();
+  await withTimeout(
+    Promise.resolve(pl.stopAll()),
+    Timeout.AUDIO,
+    `Stopping playlist '${pl.name ?? pl.id}' did not complete. Don't blindly retry.`,
+  );
   return { playlist: pl.id, playing: false };
 }
 
@@ -69,6 +79,10 @@ export async function handlePlaylistPlaySound(
       `Sound not found in playlist by ref ${JSON.stringify(ref)}`,
     );
   }
-  await pl.playSound(sound);
+  await withTimeout(
+    Promise.resolve(pl.playSound(sound)),
+    Timeout.AUDIO,
+    `Playing sound in playlist '${pl.name ?? pl.id}' did not complete. Don't blindly retry.`,
+  );
   return { playlist: pl.id, sound: docToObject(sound)._id ?? sound.id, playing: true };
 }

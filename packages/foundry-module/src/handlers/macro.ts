@@ -2,6 +2,8 @@ import {
   BridgeError,
   ErrorCode,
   Method,
+  Timeout,
+  withTimeout,
   type ParamsFor,
 } from "@foundry-bridge/shared";
 import { findInCollection, getCollection } from "../collections.js";
@@ -29,8 +31,14 @@ export async function handleMacroExecute(
   }
   let result: unknown;
   try {
-    result = await macro.execute(params.args ?? {});
+    result = await withTimeout(
+      Promise.resolve(macro.execute(params.args ?? {})),
+      Timeout.MACRO,
+      `Macro '${macro.name ?? macro.id}' did not finish in time — it may loop or wait on a dialog. ` +
+        "Don't blindly retry.",
+    );
   } catch (err) {
+    if (err instanceof BridgeError) throw err;
     throw new BridgeError(
       ErrorCode.INTERNAL,
       `Macro execution failed: ${(err as Error).message}`,

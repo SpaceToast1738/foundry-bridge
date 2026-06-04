@@ -2,6 +2,8 @@ import {
   BridgeError,
   ErrorCode,
   Method,
+  Timeout,
+  withTimeout,
   type ParamsFor,
 } from "@foundry-bridge/shared";
 import {
@@ -113,7 +115,14 @@ export async function handleCombatCreate(
   }
   const Combat = getCombatClass();
   const combat = await Combat.create({ scene: sceneId });
-  if (typeof combat.activate === "function") await combat.activate();
+  if (typeof combat.activate === "function") {
+    await withTimeout(
+      Promise.resolve(combat.activate()),
+      Timeout.ACTIVATE,
+      "Activating the new combat did not complete (headless canvas may be unavailable). " +
+        "The encounter was created; check get_status. Don't blindly retry.",
+    );
+  }
   return combatState(combat);
 }
 

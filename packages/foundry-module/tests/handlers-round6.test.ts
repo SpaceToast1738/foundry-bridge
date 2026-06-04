@@ -7,8 +7,9 @@ import {
   handleCardsReset,
   handleCardsShuffle,
 } from "../src/handlers/cards";
+import { withTimeout } from "@foundry-bridge/shared";
 import { handleTimeAdvance, handleTimeSet } from "../src/handlers/time";
-import { handleWallsDraw, withTimeout } from "../src/handlers/scenes";
+import { handleWallsDraw } from "../src/handlers/scenes";
 import { installFakeGame, type FakeDoc } from "./helpers/fake-game";
 
 describe("get_status", () => {

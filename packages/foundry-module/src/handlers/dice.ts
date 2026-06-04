@@ -2,6 +2,8 @@ import {
   BridgeError,
   ErrorCode,
   Method,
+  Timeout,
+  withTimeout,
   type ParamsFor,
 } from "@foundry-bridge/shared";
 import { findInCollection, getCollection } from "../collections.js";
@@ -94,7 +96,11 @@ export async function handleDiceRollToChat(
   if (params.flavor !== undefined) messageData.flavor = params.flavor;
   const whisper = resolveWhisper(params.whisper);
   if (whisper !== undefined) messageData.whisper = whisper;
-  await roll.toMessage(messageData);
+  await withTimeout(
+    Promise.resolve(roll.toMessage(messageData)),
+    Timeout.CHAT,
+    "Posting the roll to chat did not complete. The roll evaluated; try post_chat_message. Don't blindly retry.",
+  );
   return { formula: params.formula, total: roll.total, posted: true };
 }
 
