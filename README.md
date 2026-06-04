@@ -1,6 +1,6 @@
 # foundry-bridge
 
-Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — paginated/sorted reads and search across collections, generic document CRUD, embedded documents (journal pages, actor items, map walls/lights/notes, timed active effects), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, map geometry, dice & roll tables, combat encounters, asset upload, actor operations (conditions, ownership, HP), audio/playlists, chat-log reading, document duplication, player presentation (show/pull/ping), scene environment, cards & decks, game-time control, a health/status probe, and macro execution, plus an optional D&D-5e adapter (typed damage, rolls, rests) — all gated by read/write/destructive permission tiers.
+Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — paginated/sorted reads and search across collections, generic document CRUD, embedded documents (journal pages, actor items, map walls/lights/notes, timed active effects), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, scene creation + map geometry (walls/doors/lights/notes), dice & roll tables, combat encounters (incl. per-combatant damage/conditions/defeated), asset upload, actor operations (conditions, ownership, HP), audio/playlist building, chat-log reading, document duplication, player presentation (show/pull/ping), scene environment, cards & decks, game-time control, and macro execution, plus an optional D&D-5e adapter (typed damage, rolls, rests, spell slots, currency, XP, hit dice, death saves, concentration) — all gated by read/write/destructive permission tiers. A `get_status` health probe (with launcher diagnostics), bounded waits on headless-prone calls, and a one-command redeploy keep it diagnosable in production.
 
 See [HANDOFF.md on foundry-mcp:fix/audit-and-sdk-1x](https://github.com/SpaceToast1738/foundry-mcp/blob/fix/audit-and-sdk-1x/HANDOFF.md) for background on why we pivoted away from the raw-WebSocket approach.
 
@@ -35,7 +35,7 @@ is exceeded; `UNAVAILABLE` if no Foundry client is connected to the relay.
 | Tool | Description |
 |------|-------------|
 | `get_world` | Compact world descriptor: title, system, version, and per-collection counts. |
-| `get_status` | Health/diagnostics: relay connectivity, module version, world descriptor, and the read/write/destructive tier states. Returns `{ relayConnected: false }` instead of erroring when no client is connected. |
+| `get_status` | Health/diagnostics: relay connectivity, module version, world descriptor, tier states, **and a `launcher` block** (current world / GM status / login errors) that explains *why* the bridge is down even when the module isn't connected. Returns `{ relayConnected: false, launcher }` instead of erroring. |
 | `ping` | Health check; returns `{ pong: true, timestamp }`. |
 
 ### Reading · `read`
@@ -122,6 +122,8 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 |------|-------------|
 | `play_playlist` / `stop_playlist` | Start/stop a playlist (music, ambiance), by `_id`/`name`. |
 | `play_sound` | Play a single sound within a playlist. |
+| `create_playlist` | Create a playlist (mode sequential/shuffle/simultaneous/soundboard), optionally with sounds `{name,path,repeat?,volume?}`. |
+| `add_playlist_sounds` | Add sounds to an existing playlist (remove via `delete_embedded` `PlaylistSound`). |
 
 ### Scenes & tokens
 | Tool | Tier | Description |
@@ -132,7 +134,10 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `update_token` | write | Move/hide/rename a token on a scene by `_id`. (Delete via `delete_embedded`, `embedded:"Token"`.) |
 | `update_scene` | write | Update a scene's environment/config (darkness, grid, weather, background); default active. |
 | `reset_fog` | write | Clear the fog of war / exploration on a scene. |
-| `draw_walls` | write | Add wall segments `{x1,y1,x2,y2, door?, ds?}` to a scene (default active) — blocking + doors. Lights/notes/tiles via `create_embedded`. |
+| `draw_walls` | write | Add wall segments `{x1,y1,x2,y2, door?, ds?}` to a scene (default active) — blocking + doors. |
+| `create_scene` | write | Create a **placeable-ready** scene (sane grid/dimensions) so walls/tokens/lights work immediately; optional `background`/`activate`. Prefer over `create_document` for scenes. |
+| `toggle_door` | write | Open/close/lock a door wall (`state` 0/1/2; omit to flip). |
+| `place_light` / `place_note` | write | Typed convenience over `create_embedded` `AmbientLight`/`Note`. (Tiles etc. via `create_embedded`.) |
 
 ### Dice & tables
 | Tool | Tier | Description |
@@ -152,6 +157,10 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `advance_combat` | `start` / `next` / `previous` / `next_round` / `previous_round` / `end` (end removes the encounter). |
 | `set_initiative` | Set a combatant's initiative value. |
 | `remove_combatant` | Remove combatants from the encounter by `_id`. |
+| `add_combatants` | (now accepts `roll_initiative:true` to roll for the added combatants in one step). |
+| `damage_combatant` | Apply damage to a combatant's actor by combatant `_id` (typed on 5e). |
+| `update_combatant` | Mark a combatant `defeated`/`hidden` or set `initiative`. |
+| `combatant_condition` | Toggle a status condition on a combatant's actor. |
 
 All combat tools return `{ round, turn, combatants:[{ name, initiative, tokenId }] }`.
 
@@ -171,6 +180,12 @@ these over generic `apply_damage` as they respect damage types and traits.
 | `dnd5e_roll` | write | `save`/`check` (key = ability), `skill` (key = skill code), or `death`; returns the total. |
 | `dnd5e_rest` | write | Short or long rest (restores HP/resources). |
 | `dnd5e_actor_summary` | read | Compact HP / AC / abilities / level-or-CR sheet readout. |
+| `dnd5e_spell_slots` | write | Use/recover/set spell slots by level (1–9 or `pact`); clamped to max. |
+| `dnd5e_currency` | write | Add or set coins (pp/gp/ep/sp/cp). |
+| `dnd5e_award_xp` | write | Add XP; reports new total, next-level threshold, and `levelUpAvailable` (no auto-level). |
+| `dnd5e_hit_dice` | write | Spend/recover pooled hit dice. |
+| `dnd5e_death_saves` | write | Set death-save success/failure counters. |
+| `dnd5e_concentration` | write | Check or break concentration. |
 
 ### Present to players · `write`
 | Tool | Description |

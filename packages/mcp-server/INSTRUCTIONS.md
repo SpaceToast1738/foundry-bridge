@@ -22,8 +22,11 @@ If a tool returns `FORBIDDEN`, the bridge user is not a GM, the relevant tier is
 If a call returns `UNAVAILABLE` or behaves oddly, call **`get_status`** — it reports whether a Foundry
 client is connected to the relay (`relayConnected`), the module version, the world (title/system/version
 and per-collection counts), and the current **tier states** (`writeEnabled`/`destructiveEnabled`). Unlike
-other tools it never errors when nothing is connected — it returns `{ relayConnected: false }`. Use it to
-diagnose before retrying, and to check whether the destructive tier is on before attempting a delete.
+other tools it never errors when nothing is connected — it returns `{ relayConnected: false }`. It also
+includes a **`launcher`** block that says *why* the bridge is down even when the module isn't connected:
+`launcher.state` is `connected` / `non_gm` (bridge user isn't a GM) / `no_world` (nothing launched) /
+`login_failed` (with `launcher.availableUsers` — the users that DO exist) / `error`. Read it before
+retrying — it tells you the fix (launch a world, make the bridge user a GM, etc.).
 
 ## Reading documents
 
@@ -127,6 +130,15 @@ because they respect damage types and traits:
   (`key` = skill code, e.g. `"ath"`), or `death` (no key). Returns the total.
 - `dnd5e_rest { actor, type }` — `short` or `long` rest (restores HP/resources).
 - `dnd5e_actor_summary { actor }` — compact HP / AC / abilities / level-or-CR readout from the sheet.
+- `dnd5e_spell_slots { actor, level, action, amount? }` — `level` 1–9 or `"pact"`; `action`
+  `use`/`recover`/`set` (clamped to max).
+- `dnd5e_currency { actor, mode, changes }` — `mode` `add`/`set`; `changes` any of pp/gp/ep/sp/cp.
+- `dnd5e_award_xp { actor, amount }` — add XP; reports new total, next-level threshold, and
+  `levelUpAvailable` (does not auto-level).
+- `dnd5e_hit_dice { actor, action, amount? }` — spend/recover pooled hit dice.
+- `dnd5e_death_saves { actor, successes?, failures? }` — set the counters (to *roll* a death save use
+  `dnd5e_roll kind:"death"`).
+- `dnd5e_concentration { actor, action }` — `check` or `break`.
 
 On non-5e worlds, use the generic actor tools (`apply_damage`, `get_roll_data` + `roll_dice`, etc.).
 
@@ -214,6 +226,10 @@ Prefer importing system content over hand-building it. Import first, then inspec
 
 - `play_playlist { playlist }` / `stop_playlist { playlist }` — start/stop a playlist (music, ambiance).
 - `play_sound { playlist, sound }` — play one sound within a playlist. Reference by `_id` or `name`.
+- `create_playlist { name, mode?, sounds? }` — build a playlist (`mode` 0 sequential / 1 shuffle / 2
+  simultaneous / -1 soundboard); each sound is `{ name, path, repeat?, volume? }`.
+- `add_playlist_sounds { playlist, sounds }` — add sounds to an existing playlist (remove via
+  `delete_embedded` `"PlaylistSound"`).
 
 ## Scenes & tokens
 
@@ -239,8 +255,14 @@ Coordinates are scene pixels. Use `get_active_scene` for the scene's dimensions 
 - `draw_walls { scene?, segments }` — add wall segments in one call. Each segment is
   `{ x1, y1, x2, y2, door?, ds? }` (`door`: 0 none / 1 door / 2 secret; `ds`: 0 closed / 1 open / 2
   locked). Defaults to the active scene. Convenience over `create_embedded` `"Wall"` for blocking
-  line-of-sight/movement and adding doors. For lights/notes/tiles, use `create_embedded` (see
-  *Embedded documents → Map geometry*).
+  line-of-sight/movement and adding doors.
+- `create_scene { name, width?, height?, grid_size?, grid_type?, padding?, background?, activate? }` —
+  make a **placeable-ready** scene (sane grid/dimensions) so you can immediately add walls/tokens/lights.
+  Prefer this over `create_document` for scenes — a minimally-built scene stalls on placeable writes.
+- `toggle_door { wall_id, state?, scene? }` — open/close/lock a door wall (`state` 0/1/2; omit to flip).
+- `place_light { x, y, dim?, bright?, color?, scene? }` and `place_note { x, y, journal, text?,
+  icon_size?, scene? }` — typed convenience over `create_embedded` `"AmbientLight"`/`"Note"`. For tiles
+  and other placeables, use `create_embedded` (see *Embedded documents → Map geometry*).
 
 ## Dice & tables
 
@@ -265,6 +287,11 @@ Build tables so `draw_table` has content: `create_table { name, formula?, result
   `"previous_round"` | `"end"` (end removes the encounter).
 - `set_initiative { combatant, value, combat? }` — set a combatant's initiative.
 - `remove_combatant { combatants: [ids], combat? }` — remove combatants from the encounter.
+- `add_combatants` accepts `roll_initiative: true` to roll for the just-added combatants in one step.
+- `damage_combatant { combatant, amount, type?, combat? }` — apply damage to a combatant's actor (typed
+  on 5e). `update_combatant { combatant, defeated?, hidden?, initiative? }` — mark defeated / hide /
+  set init. `combatant_condition { combatant, condition, active?, combat? }` — toggle a condition on
+  the combatant's actor.
 
 All return combat state: `{ round, turn, combatants:[{ name, initiative, tokenId }] }`. Typical flow:
 `start_combat` → `place_token`/`add_combatants` → `roll_initiative` → `advance_combat "start"` → `"next"` …
@@ -304,7 +331,9 @@ For worlds that use card stacks (a deck, plus player hands/piles — all `Cards`
 - `NOT_FOUND` — the document or folder ref didn't resolve. Check the spelling or list to discover the right name.
 - `BAD_REQUEST` — invalid params. The error message names the offending field.
 - `UNAVAILABLE` — the Foundry module is not currently connected to the bridge. The bridge will reconnect automatically; retry shortly.
-- `TIMEOUT` — Foundry didn't answer within 30 seconds. Usually transient.
+- `TIMEOUT` — Foundry didn't answer in time. Some are transient (retry once), but **read the message**:
+  canvas/scene ops (placeables, scene/combat activate, present, audio, macro) return a bounded timeout
+  with the actual fix (e.g. "activate the target scene first") — act on it rather than blindly retrying.
 - `INTERNAL` — something else broke. Report it.
 
 ## Operating discipline

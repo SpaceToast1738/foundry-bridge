@@ -68,7 +68,9 @@ for status effects; `get_roll_data` to feed `roll_dice`; `assign_actor` to give 
 `apply_damage`/`apply_healing` for HP (system-dependent — falls back to `modify_document` if unsupported).
 On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed, respects resistances),
 `dnd5e_apply_healing` (+temp HP), `dnd5e_roll` (saves/checks/skills/death), `dnd5e_rest`,
-`dnd5e_actor_summary`. They error on non-5e worlds, so check `get_world`'s system first.
+`dnd5e_actor_summary`, plus resource management: `dnd5e_spell_slots`, `dnd5e_currency`, `dnd5e_award_xp`,
+`dnd5e_hit_dice`, `dnd5e_death_saves`, `dnd5e_concentration`. They error on non-5e worlds, so check
+`get_world`'s system first.
 
 ## Running the table
 - **Scenes/tokens:** `get_active_scene` for context; `activate_scene` to switch view; `place_token`
@@ -79,14 +81,16 @@ On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed
 - **Audio:** `play_playlist`/`stop_playlist`/`play_sound` for music & ambiance.
 - **Read chat / duplicate:** `get_messages` reads recent chat for context; `duplicate_document` clones
   an actor/item/journal (great for reskinning).
-- **Combat:** `start_combat` → `add_combatants` (token ids) → `roll_initiative` → `advance_combat`
-  (`next`/`next_round`/`end`); `set_initiative`/`remove_combatant` for fine control.
-- **Scene env / maps:** `update_scene` (darkness/lighting/weather), `reset_fog`; `draw_walls` for
-  walls & doors. Build lights/notes/tiles and timed effects with `create_embedded` (`"AmbientLight"`,
-  `"Note"`, `"ActiveEffect"` with a `duration`) — see the server `INSTRUCTIONS.md` for field shapes.
-  Placeables (walls/tokens/lights/notes) create reliably only on the **active** scene — `activate_scene`
-  first; a `TIMEOUT` that says so means "activate the target scene," not "retry."
+- **Combat:** `start_combat` → `add_combatants` (token ids; pass `roll_initiative:true` to roll on add) →
+  `advance_combat` (`next`/`next_round`/`end`); `set_initiative`/`remove_combatant` for fine control;
+  `damage_combatant`/`combatant_condition`/`update_combatant` (defeated/hidden) to run the fight.
+- **Scene env / maps:** `create_scene` (placeable-ready — use it instead of `create_document` for scenes);
+  `update_scene` (darkness/lighting/weather), `reset_fog`; `draw_walls` + `toggle_door`; `place_light`/
+  `place_note` (tiles etc. via `create_embedded`); timed effects via `create_embedded "ActiveEffect"`.
+  Placeables create reliably only on the **active** scene — `activate_scene` first; a `TIMEOUT` that says
+  so means "activate the target scene," not "retry."
 - **Cards:** `shuffle_cards`/`deal_cards`/`draw_cards`/`pass_cards`/`reset_cards` for worlds with decks.
+- **Audio:** also `create_playlist` / `add_playlist_sounds` to build playlists (not just play them).
 - **Game time:** `advance_time { seconds }` (negative rewinds) / `set_world_time`.
 - **Present:** `show_to_players` (image/journal), `pull_to_scene`, `ping_location`.
 - **Macros:** `execute_macro` runs stored code — destructive-tier gated; use sparingly.
