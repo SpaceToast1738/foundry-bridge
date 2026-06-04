@@ -13,7 +13,7 @@ credentials.json
 # Local, ad-hoc live-verification scripts (read the MCP token from a local config)
 /fulltest.mjs
 /verify-*.mjs
-/probe-*.mjs
+/probe*.mjs
 /poll-status.mjs
 /status-once.mjs
 /triage.mjs
