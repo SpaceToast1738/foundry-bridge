@@ -163,6 +163,39 @@ describe("Relay", () => {
     module.close();
   });
 
+  it("tracks stats and recent activity across calls", async () => {
+    relay = new Relay({ port: 0 });
+    await relay.start();
+    const module = await connectModule(relay.getPort());
+    module.on("message", (raw) => {
+      const req = decodeRequest(raw.toString());
+      if (req.method === Method.PING) {
+        module.send(JSON.stringify({ id: req.id, ok: true, result: "ok" }));
+      } else {
+        module.send(
+          JSON.stringify({ id: req.id, ok: false, error: { code: ErrorCode.FORBIDDEN, message: "no" } }),
+        );
+      }
+    });
+    await new Promise((r) => setTimeout(r, 10));
+
+    await relay.call(Method.PING, {});
+    await relay.call(Method.DOCUMENTS_DELETE, { type: "Actor", ids: ["a"] }).catch(() => undefined);
+
+    const stats = relay.getStats();
+    expect(stats.totalCalls).toBe(2);
+    expect(stats.errorCount).toBe(1);
+    expect(stats.lastError).toMatchObject({ code: ErrorCode.FORBIDDEN, method: Method.DOCUMENTS_DELETE });
+    expect(typeof stats.connectedSince).toBe("number");
+
+    const activity = relay.getRecentActivity();
+    expect(activity).toHaveLength(2);
+    // Most-recent-first: the failed delete is first.
+    expect(activity[0]).toMatchObject({ method: Method.DOCUMENTS_DELETE, ok: false });
+    expect(activity[1]).toMatchObject({ method: Method.PING, ok: true });
+    module.close();
+  });
+
   it("isConnected reflects current state", async () => {
     relay = new Relay({ port: 0 });
     await relay.start();

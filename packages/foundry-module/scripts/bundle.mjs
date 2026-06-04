@@ -27,7 +27,12 @@ async function main() {
     sourcemap: "linked",
     legalComments: "none",
     // Foundry's `Hooks`, `game`, `ui`, document classes are runtime globals.
-    define: { "process.env.NODE_ENV": "\"production\"" },
+    define: {
+      "process.env.NODE_ENV": "\"production\"",
+      // Baked from the manifest so get_status can report the ACTUALLY-running
+      // code version (Foundry caches module.json's version at server boot).
+      __BRIDGE_MODULE_VERSION__: JSON.stringify(manifest.version),
+    },
   });
 
   await copyFile(

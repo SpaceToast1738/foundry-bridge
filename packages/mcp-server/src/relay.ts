@@ -32,7 +32,25 @@ interface Pending {
   resolve: (value: unknown) => void;
   reject: (err: BridgeError) => void;
   timer: NodeJS.Timeout;
+  method: Method;
+  startedAt: number;
 }
+
+export interface RelayStats {
+  connectedSince: number | null;
+  totalCalls: number;
+  errorCount: number;
+  lastError: { code: string; message: string; method?: string; ts: number } | null;
+}
+
+export interface ActivityEntry {
+  method: string;
+  ok: boolean;
+  ms: number;
+  ts: number;
+}
+
+const MAX_ACTIVITY = 50;
 
 export class Relay {
   private server: WebSocketServer | null = null;
@@ -43,6 +61,12 @@ export class Relay {
   private readonly port: number;
   private readonly requestTimeoutMs: number;
   private readonly logger: NonNullable<RelayOptions["logger"]>;
+  // Observability (A2/A3): cheap in-memory counters + a recent-activity ring.
+  private connectedSince: number | null = null;
+  private totalCalls = 0;
+  private errorCount = 0;
+  private lastError: RelayStats["lastError"] = null;
+  private readonly activity: ActivityEntry[] = [];
 
   constructor(opts: RelayOptions) {
     this.host = opts.host ?? "127.0.0.1";
@@ -99,6 +123,35 @@ export class Relay {
     return this.socket !== null && this.socket.readyState === this.socket.OPEN;
   }
 
+  getStats(): RelayStats {
+    return {
+      connectedSince: this.connectedSince,
+      totalCalls: this.totalCalls,
+      errorCount: this.errorCount,
+      lastError: this.lastError,
+    };
+  }
+
+  /** Most-recent-first list of the last MAX_ACTIVITY calls served. */
+  getRecentActivity(): ActivityEntry[] {
+    return [...this.activity].reverse();
+  }
+
+  private recordSettle(
+    method: Method,
+    startedAt: number,
+    ok: boolean,
+    error?: { code: string; message: string },
+  ): void {
+    const ts = Date.now();
+    this.activity.push({ method, ok, ms: ts - startedAt, ts });
+    if (this.activity.length > MAX_ACTIVITY) this.activity.shift();
+    if (!ok) {
+      this.errorCount += 1;
+      if (error) this.lastError = { ...error, method, ts };
+    }
+  }
+
   getPort(): number {
     if (this.actualPort === null) {
       throw new Error("Relay not started");
@@ -120,29 +173,25 @@ export class Relay {
         return;
       }
       const id = randomUUID();
+      const startedAt = Date.now();
+      this.totalCalls += 1;
       const timeoutMs = opts.timeoutMs ?? this.requestTimeoutMs;
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(
-          new BridgeError(
-            ErrorCode.TIMEOUT,
-            `Method '${method}' timed out after ${timeoutMs}ms`,
-          ),
-        );
+        const message = `Method '${method}' timed out after ${timeoutMs}ms`;
+        this.recordSettle(method, startedAt, false, { code: ErrorCode.TIMEOUT, message });
+        reject(new BridgeError(ErrorCode.TIMEOUT, message));
       }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve, reject, timer, method, startedAt });
       const req: Request = { id, method, params };
       try {
         socket.send(encode(req));
       } catch (err) {
         clearTimeout(timer);
         this.pending.delete(id);
-        reject(
-          new BridgeError(
-            ErrorCode.INTERNAL,
-            `Failed to send request: ${(err as Error).message}`,
-          ),
-        );
+        const message = `Failed to send request: ${(err as Error).message}`;
+        this.recordSettle(method, startedAt, false, { code: ErrorCode.INTERNAL, message });
+        reject(new BridgeError(ErrorCode.INTERNAL, message));
       }
     });
   }
@@ -160,12 +209,14 @@ export class Relay {
       );
     }
     this.socket = ws;
+    this.connectedSince = Date.now();
     this.logger.log(`[relay] module connected`);
     ws.on("message", (raw: RawData) => this.handleMessage(raw.toString()));
     ws.on("close", () => {
       this.logger.warn(`[relay] module disconnected`);
       if (this.socket === ws) {
         this.socket = null;
+        this.connectedSince = null;
         this.rejectAllPending(
           new BridgeError(ErrorCode.UNAVAILABLE, "Module disconnected"),
         );
@@ -194,8 +245,13 @@ export class Relay {
     this.pending.delete(res.id);
     clearTimeout(pending.timer);
     if (res.ok) {
+      this.recordSettle(pending.method, pending.startedAt, true);
       pending.resolve(res.result);
     } else {
+      this.recordSettle(pending.method, pending.startedAt, false, {
+        code: res.error.code,
+        message: res.error.message,
+      });
       pending.reject(new BridgeError(res.error.code, res.error.message));
     }
   }
@@ -203,6 +259,10 @@ export class Relay {
   private rejectAllPending(err: BridgeError): void {
     for (const [, pending] of this.pending) {
       clearTimeout(pending.timer);
+      this.recordSettle(pending.method, pending.startedAt, false, {
+        code: err.code,
+        message: err.message,
+      });
       pending.reject(err);
     }
     this.pending.clear();

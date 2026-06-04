@@ -39,6 +39,20 @@ function loadInstructions(): string {
   return "";
 }
 
+function loadServerVersion(): string {
+  for (const file of [
+    path.join(__dirname, "..", "package.json"),
+    path.join(__dirname, "..", "..", "package.json"),
+  ]) {
+    try {
+      return JSON.parse(fs.readFileSync(file, "utf-8")).version ?? "unknown";
+    } catch {
+      // try next candidate
+    }
+  }
+  return "unknown";
+}
+
 function loadCredentials(filePath: string): FoundryCredential[] {
   try {
     const raw = fs.readFileSync(filePath, "utf-8");
@@ -92,7 +106,7 @@ function formatToolError(err: unknown): {
 
 function createServer(context: ToolContext, instructions: string): Server {
   const server = new Server(
-    { name: "foundry-bridge", version: "0.1.0" },
+    { name: "foundry-bridge", version: context.serverVersion ?? "0.0.0" },
     {
       capabilities: { tools: {} },
       instructions: instructions || undefined,
@@ -147,6 +161,7 @@ async function main(): Promise<void> {
     relay,
     credentials,
     activeIndex,
+    serverVersion: loadServerVersion(),
   };
 
   const instructions = loadInstructions();

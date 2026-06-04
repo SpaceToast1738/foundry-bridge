@@ -81,6 +81,9 @@ declare global {
   var game: FoundryGame;
   var ui: FoundryUI;
   var CONFIG: Record<string, unknown>;
+  /** Injected by esbuild (scripts/bundle.mjs) from the manifest version; the
+   * actually-running code version. Undefined under tsc (tests). */
+  var __BRIDGE_MODULE_VERSION__: string | undefined;
 }
 
 export {};

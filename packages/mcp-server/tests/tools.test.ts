@@ -203,14 +203,17 @@ describe("get_status", () => {
     const relay = {
       isConnected: () => connected,
       call: jest.fn(async () => ({ moduleVersion: "0.2.0", world: { title: "W" } })),
+      getStats: () => ({ connectedSince: 1, totalCalls: 3, errorCount: 1, lastError: null }),
+      getRecentActivity: () => [{ method: "ping", ok: true, ms: 5, ts: 2 }],
     } as unknown as Relay;
-    return { relay, credentials: [], activeIndex: 0 };
+    return { relay, credentials: [], activeIndex: 0, serverVersion: "9.9.9" };
   }
 
   it("surfaces launcher diagnostics when the module is NOT connected", async () => {
     writeFileSync(statusPath, JSON.stringify({ state: "non_gm", currentWorld: "Driftworlds", isGM: false }));
     const out = (await dispatchTool("get_status", {}, ctxWithConn(false))) as Record<string, unknown>;
     expect(out.relayConnected).toBe(false);
+    expect(out.serverVersion).toBe("9.9.9");
     expect(out.launcher).toMatchObject({ state: "non_gm", currentWorld: "Driftworlds", isGM: false });
   });
 
@@ -219,7 +222,14 @@ describe("get_status", () => {
     const out = (await dispatchTool("get_status", {}, ctxWithConn(true))) as Record<string, unknown>;
     expect(out.relayConnected).toBe(true);
     expect(out.moduleVersion).toBe("0.2.0");
+    expect(out.serverVersion).toBe("9.9.9");
+    expect(out.relayStats).toMatchObject({ totalCalls: 3, errorCount: 1 });
     expect(out.launcher).toMatchObject({ state: "connected" });
+  });
+
+  it("get_recent_activity returns the relay ring buffer (no module round-trip)", async () => {
+    const out = (await dispatchTool("get_recent_activity", {}, ctxWithConn(false))) as Record<string, unknown>;
+    expect(out.activity).toEqual([{ method: "ping", ok: true, ms: 5, ts: 2 }]);
   });
 
   it("returns state:unknown when no status file exists", async () => {

@@ -1167,7 +1167,14 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "get_status",
     description:
-      "Health & diagnostics: whether a Foundry client is connected to the bridge relay, the module version, the world (title/system/version/counts), and the read/write/destructive tier states. Safe to call any time — returns { relayConnected:false } instead of erroring when no client is connected.",
+      "Health & diagnostics. Reports relayConnected, serverVersion, moduleVersion (Foundry's cached manifest) AND moduleCodeVersion (the actually-running bundle — compare these if a deploy seems stale), the world (title/system/version/counts), tier states, relayStats (connectedSince/totalCalls/errorCount/lastError), and a launcher block (why the bridge is down when disconnected). Safe any time — returns { relayConnected:false, ... } instead of erroring.",
+    inputSchema: { type: "object", properties: {}, required: [] },
+  });
+
+  tools.push({
+    name: "get_recent_activity",
+    description:
+      "Recent bridge call log (most-recent-first, up to 50): each entry is { method, ok, ms, ts }. Server-side — answers even when the Foundry module is disconnected. Use to see what's been happening or debug failures.",
     inputSchema: { type: "object", properties: {}, required: [] },
   });
 
@@ -1363,6 +1370,8 @@ export interface ToolContext {
   relay: Relay;
   credentials: FoundryCredential[];
   activeIndex: number;
+  /** This mcp-server's version (from its package.json), reported by get_status. */
+  serverVersion?: string;
 }
 
 export async function dispatchTool(
@@ -1489,12 +1498,16 @@ export async function dispatchTool(
       // so don't go through relay.call (which throws UNAVAILABLE). Always attach
       // the launcher diagnostics so the caller can see WHY it's down.
       const launcher = readLauncherStatus();
+      const relayStats = ctx.relay.getStats();
       if (!ctx.relay.isConnected()) {
-        return { relayConnected: false, launcher };
+        return { relayConnected: false, serverVersion: ctx.serverVersion, relayStats, launcher };
       }
       const status = (await ctx.relay.call(Method.STATUS_GET, {})) as Record<string, unknown>;
-      return { relayConnected: true, ...status, launcher };
+      return { relayConnected: true, serverVersion: ctx.serverVersion, ...status, relayStats, launcher };
     }
+    case "get_recent_activity":
+      // Server-side: reads the relay ring buffer; works even if the module is down.
+      return { activity: ctx.relay.getRecentActivity() };
     case "deal_cards":
       return ctx.relay.call(Method.CARDS_DEAL, params);
     case "draw_cards":

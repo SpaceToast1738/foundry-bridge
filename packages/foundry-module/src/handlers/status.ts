@@ -7,7 +7,11 @@ export interface StatusGetResult {
    * delivered the call). The server adds `relayConnected` when the module is
    * unreachable; see the mcp-server dispatch for get_status. */
   moduleConnected: true;
+  /** Foundry's cached manifest version (can lag — the server caches module.json
+   * at boot). Compare with `moduleCodeVersion` (the actually-running bundle). */
   moduleVersion?: string;
+  /** The running code version, baked into the bundle at build time. */
+  moduleCodeVersion?: string;
   world: WorldGetResult;
   tiers: {
     isGM: boolean;
@@ -22,6 +26,8 @@ export function handleStatusGet(): StatusGetResult {
   return {
     moduleConnected: true,
     moduleVersion: game.modules?.get(MODULE_ID)?.version,
+    moduleCodeVersion:
+      typeof __BRIDGE_MODULE_VERSION__ !== "undefined" ? __BRIDGE_MODULE_VERSION__ : undefined,
     world: handleWorldGet(),
     tiers: {
       isGM: tiers.isGM,
