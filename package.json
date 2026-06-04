@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc --build",
     "bundle": "npm run build:bundle --workspaces --if-present",
-    "dist": "npm run build && npm run bundle",
+    "dist": "npm run build && npm run bundle && node scripts/check-dist.mjs",
     "test": "jest --passWithNoTests",
     "lint": "eslint .",
     "clean": "tsc --build --clean && rimraf \"packages/*/build\" \"packages/*/dist\""

@@ -196,6 +196,34 @@ For an end-to-end check that matches the headline goal from the handoff, point a
 3. `move_to_folder({ type: "JournalEntry", entity: { name: "..." }, folder: { name: "MCP-smoke-YYYYMMDD" } })`
 4. With the destructive tier still off, `delete_document` should return `FORBIDDEN` — flip the world setting only after a week of clean reads/writes.
 
+## 8. Redeploying after a code change
+
+One command (on the VPS, from the repo root) rebuilds and rolls out **both** the module and the server,
+copying all three module files (`main.js`, `main.js.map`, **and `module.json`** — the last is the bit a
+manual `cp main.js` forgets, leaving a stale version):
+
+```bash
+MODULE_DIR=/opt/foundry/data/Data/modules/foundry-bridge sudo -E ./scripts/redeploy.sh
+```
+
+It runs `git pull` → `npm ci` → `npm run dist` (which runs `scripts/check-dist.mjs` — aborts on an
+incomplete or version-mismatched bundle) → copies the module → `systemctl restart` the gateway + browser.
+Then confirm with **`get_status`** (expect `relayConnected: true`).
+
+## Diagnosing a down bridge — `get_status`
+
+`get_status` is the first thing to call. It answers even when the module isn't connected, and now includes
+a **`launcher`** block fed by the headless client (`/var/lib/foundry-bridge/launcher-status.json`, path via
+`FOUNDRY_BRIDGE_LAUNCHER_STATUS` — the gateway and browser units share it on the VPS filesystem):
+
+| `launcher.state` | Meaning → fix |
+|---|---|
+| `connected` | Healthy (also `relayConnected: true`). |
+| `non_gm` | Bridge user logged in but isn't a GM in this world → set its role to Assistant GM, restart browser. |
+| `no_world` | No world launched (Foundry at Setup) → launch a world. |
+| `login_failed` | Configured user not in the launched world (`launcher.availableUsers` lists who is) → set `username` to one of those (a GM), or add a GM bot user by that name. |
+| `error` / `starting` | Launcher crashed or mid-start → `journalctl -u foundry-bridge-browser`. |
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
