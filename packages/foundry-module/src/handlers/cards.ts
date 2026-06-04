@@ -110,12 +110,19 @@ export async function handleCardsPass(
   const from = resolveStack(params.from);
   const to = resolveStack(params.to);
   const pass = requireMethod(from, "pass");
-  const passed = await pass.call(from, to, params.cards, QUIET);
+  // Foundry's Cards#pass return shape varies by version (it can come back empty
+  // even on a successful move), so report based on the request + resulting
+  // sizes rather than trusting the return value. Surface card names only if the
+  // version actually provided them.
+  const result = await pass.call(from, to, params.cards, QUIET);
+  const names = cardNames(result);
   return {
     from: from.id,
     to: to.id,
-    passed: cardNames(passed),
+    requested: params.cards.length,
     toSize: cardCount(to),
+    fromSize: cardCount(from),
+    ...(names.length ? { passed: names } : {}),
   };
 }
 
