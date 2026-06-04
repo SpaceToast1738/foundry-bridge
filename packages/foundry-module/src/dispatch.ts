@@ -32,6 +32,7 @@ import {
   handleEmbeddedUpdate,
 } from "./handlers/embedded.js";
 import {
+  handleCompendiumExport,
   handleCompendiumImport,
   handleCompendiumList,
   handleCompendiumSearch,
@@ -50,6 +51,7 @@ import {
   handleSceneCreate,
   handleSceneResetFog,
   handleSceneUpdate,
+  handleTemplatePlace,
   handleTokenPlace,
   handleTokenUpdate,
   handleWallsDraw,
@@ -151,6 +153,10 @@ const handlers: Partial<Record<Method, Handler>> = {
   [Method.COMPENDIUM_IMPORT]: (params) =>
     handleCompendiumImport(
       params as Parameters<typeof handleCompendiumImport>[0],
+    ),
+  [Method.COMPENDIUM_EXPORT]: (params) =>
+    handleCompendiumExport(
+      params as Parameters<typeof handleCompendiumExport>[0],
     ),
   [Method.FOLDERS_CREATE]: (params) =>
     handleFoldersCreate(params as Parameters<typeof handleFoldersCreate>[0]),
@@ -267,6 +273,8 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleLightPlace(params as Parameters<typeof handleLightPlace>[0]),
   [Method.NOTE_PLACE]: (params) =>
     handleNotePlace(params as Parameters<typeof handleNotePlace>[0]),
+  [Method.TEMPLATE_PLACE]: (params) =>
+    handleTemplatePlace(params as Parameters<typeof handleTemplatePlace>[0]),
   [Method.DND5E_SPELL_SLOTS]: (params) =>
     handleDnd5eSpellSlots(params as Parameters<typeof handleDnd5eSpellSlots>[0]),
   [Method.DND5E_CURRENCY]: (params) =>

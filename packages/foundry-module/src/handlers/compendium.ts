@@ -5,6 +5,7 @@ import {
   type ParamsFor,
 } from "@foundry-bridge/shared";
 import {
+  collectionForType,
   docToObject,
   findInCollection,
   getCollection,
@@ -24,6 +25,7 @@ interface PackMetadata {
 interface FoundryPack {
   metadata: PackMetadata;
   documentName: string;
+  locked?: boolean;
   getIndex(): Promise<{ contents: Record<string, unknown>[] }>;
   getDocument(id: string): Promise<unknown>;
 }
@@ -141,6 +143,52 @@ export async function handleCompendiumImport(
   }
 
   const created = await cls.createDocuments(sources);
+  return {
+    pack: params.pack,
+    count: created.length,
+    documents: created.map(docToObject),
+  };
+}
+
+export async function handleCompendiumExport(
+  params: ParamsFor<typeof Method.COMPENDIUM_EXPORT>,
+): Promise<{ pack: string; count: number; documents: Record<string, unknown>[] }> {
+  const pack = getPack(params.pack);
+  if (pack.locked) {
+    throw new BridgeError(
+      ErrorCode.FORBIDDEN,
+      `Compendium pack '${params.pack}' is locked; unlock it in Foundry before exporting.`,
+    );
+  }
+  if (!isWritableDocumentType(params.type)) {
+    throw new BridgeError(ErrorCode.BAD_REQUEST, `Unknown document type '${params.type}'`);
+  }
+  if (pack.documentName && pack.documentName !== params.type) {
+    throw new BridgeError(
+      ErrorCode.BAD_REQUEST,
+      `Pack '${params.pack}' holds '${pack.documentName}', not '${params.type}'`,
+    );
+  }
+  const cls = getDocumentClass(params.type);
+  if (!cls) {
+    throw new BridgeError(ErrorCode.UNAVAILABLE, `Document class '${params.type}' is not loaded`);
+  }
+  const collection = getCollection(collectionForType(params.type));
+  const sources: Record<string, unknown>[] = [];
+  for (const ref of params.entries) {
+    const raw = collection && findInCollection(collection, ref);
+    if (!raw) {
+      throw new BridgeError(
+        ErrorCode.NOT_FOUND,
+        `World ${params.type} not found by ref ${JSON.stringify(ref)}`,
+      );
+    }
+    const source = docToObject(raw);
+    delete source._id;
+    delete source.folder; // pack folders differ from world folders
+    sources.push(source);
+  }
+  const created = await cls.createDocuments(sources, { pack: pack.metadata.id });
   return {
     pack: params.pack,
     count: created.length,

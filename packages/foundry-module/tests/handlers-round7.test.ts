@@ -4,6 +4,7 @@ import {
   handleLightPlace,
   handleNotePlace,
   handleSceneCreate,
+  handleTemplatePlace,
 } from "../src/handlers/scenes";
 import {
   handlePlaylistAddSounds,
@@ -133,6 +134,17 @@ describe("place_light / place_note", () => {
     await expect(
       handleNotePlace({ x: 1, y: 2, journal: { _id: "nope" } }),
     ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+    restore();
+  });
+
+  it("places a measured template (cone) with its geometry", async () => {
+    const created: { kind: string; data: Record<string, unknown> }[] = [];
+    const restore = installFakeGame({ scenes: [makeScene(created)], activeSceneId: "s1" });
+    await handleTemplatePlace({ t: "cone", x: 10, y: 20, distance: 15, direction: 90, angle: 53 });
+    expect(created[0]).toMatchObject({
+      kind: "MeasuredTemplate",
+      data: { t: "cone", x: 10, y: 20, distance: 15, direction: 90, angle: 53 },
+    });
     restore();
   });
 });

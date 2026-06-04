@@ -283,6 +283,28 @@ export async function handleNotePlace(
   return docToObject(created[0]);
 }
 
+export async function handleTemplatePlace(
+  params: ParamsFor<typeof Method.TEMPLATE_PLACE>,
+): Promise<Record<string, unknown>> {
+  const scene = resolveScene(params.scene);
+  const data: Record<string, unknown> = {
+    t: params.t,
+    x: params.x,
+    y: params.y,
+    distance: params.distance,
+  };
+  if (params.direction !== undefined) data.direction = params.direction;
+  if (params.angle !== undefined) data.angle = params.angle;
+  if (params.width !== undefined) data.width = params.width;
+  const created = await withTimeout(
+    scene.createEmbeddedDocuments("MeasuredTemplate", [data]),
+    Timeout.PLACEABLE,
+    `Placing a measured template on scene '${scene.name ?? scene.id}' did not complete. Activate the ` +
+      "target scene first (placeables need the active/rendered scene). Don't blindly retry.",
+  );
+  return docToObject(created[0]);
+}
+
 export async function handleTokenUpdate(
   params: ParamsFor<typeof Method.TOKEN_UPDATE>,
 ): Promise<Record<string, unknown>> {

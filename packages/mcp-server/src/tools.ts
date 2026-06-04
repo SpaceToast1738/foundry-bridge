@@ -556,6 +556,21 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "export_to_compendium",
+    description:
+      "Export world documents INTO a compendium pack (campaign backups / module authoring). `type` is the document type (Actor/Item/JournalEntry/…); `entries` are world docs by _id/name. The pack must be unlocked and hold that type. Fresh _ids are assigned in the pack.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pack: { type: "string", description: "Target pack id, e.g. \"world.my-monsters\"." },
+        type: { type: "string", description: "Document type of the entries (e.g. \"Actor\")." },
+        entries: { type: "array", items: docRefSchema, description: "World documents by _id or name." },
+      },
+      required: ["pack", "type", "entries"],
+    },
+  });
+
+  tools.push({
     name: "post_chat_message",
     description:
       "Post a message to the Foundry chat log. By default visible to everyone; set whisper to \"gm\" (or a list of user refs) to restrict it. Use sparingly — it appears live in players' chat unless whispered.",
@@ -1357,6 +1372,26 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "place_template",
+    description:
+      "Place a measured template (spell area / AoE) on a scene (default active). `t`: circle/cone/ray/rect; `x,y` pixel origin; `distance` in grid units; `direction` (deg, for cone/ray/rect); `angle` (cone spread, deg); `width` (ray). Convenience over create_embedded \"MeasuredTemplate\".",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scene: docRefSchema,
+        t: { type: "string", enum: ["circle", "cone", "ray", "rect"] },
+        x: { type: "number" },
+        y: { type: "number" },
+        distance: { type: "number", description: "Size in grid units (e.g. 20 for a 20-ft radius)." },
+        direction: { type: "number", description: "Rotation in degrees (cone/ray/rect)." },
+        angle: { type: "number", description: "Cone spread in degrees." },
+        width: { type: "number", description: "Ray width in grid units." },
+      },
+      required: ["t", "x", "y", "distance"],
+    },
+  });
+
+  tools.push({
     name: "show_credentials",
     description:
       "List the Foundry credentials this bridge is configured with. Passwords are never returned.",
@@ -1409,6 +1444,8 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMPENDIUM_SEARCH, params);
     case "import_from_compendium":
       return ctx.relay.call(Method.COMPENDIUM_IMPORT, params);
+    case "export_to_compendium":
+      return ctx.relay.call(Method.COMPENDIUM_EXPORT, params);
     case "browse_files":
       return ctx.relay.call(Method.FILES_BROWSE, params);
     case "upload_image":
@@ -1532,6 +1569,8 @@ export async function dispatchTool(
       return ctx.relay.call(Method.LIGHT_PLACE, params);
     case "place_note":
       return ctx.relay.call(Method.NOTE_PLACE, params);
+    case "place_template":
+      return ctx.relay.call(Method.TEMPLATE_PLACE, params);
     case "post_chat_message":
       return ctx.relay.call(Method.MESSAGES_CREATE, params);
     case "get_active_scene":

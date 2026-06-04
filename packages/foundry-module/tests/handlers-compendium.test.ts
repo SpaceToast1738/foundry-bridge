@@ -1,4 +1,5 @@
 import {
+  handleCompendiumExport,
   handleCompendiumImport,
   handleCompendiumList,
   handleCompendiumSearch,
@@ -63,5 +64,54 @@ describe("compendium handlers", () => {
     expect(res.count).toBe(1);
     expect(res.documents[0]).toMatchObject({ name: "Goblin", folder: "f1" });
     expect(res.documents[0]._id).not.toBe("m1");
+  });
+});
+
+describe("compendium export", () => {
+  function exportPack(locked = false, documentName = "Actor") {
+    return {
+      metadata: { id: "world.my-monsters", label: "My Monsters", type: documentName },
+      documentName,
+      locked,
+      getIndex: async () => ({ contents: [] }),
+      getDocument: async () => undefined,
+    };
+  }
+
+  it("exports a world actor into an unlocked pack, stripping _id/folder", async () => {
+    const restore = installFakeGame({
+      packs: [exportPack(false)],
+      actors: [{ _id: "a1", name: "Custom Dragon", folder: "f1" }],
+    });
+    const res = await handleCompendiumExport({
+      pack: "world.my-monsters",
+      type: "Actor",
+      entries: [{ _id: "a1" }],
+    });
+    expect(res.count).toBe(1);
+    expect(res.documents[0]).toMatchObject({ name: "Custom Dragon" });
+    restore();
+  });
+
+  it("FORBIDDEN when the pack is locked", async () => {
+    const restore = installFakeGame({
+      packs: [exportPack(true)],
+      actors: [{ _id: "a1", name: "X" }],
+    });
+    await expect(
+      handleCompendiumExport({ pack: "world.my-monsters", type: "Actor", entries: [{ _id: "a1" }] }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    restore();
+  });
+
+  it("BAD_REQUEST when the pack holds a different type", async () => {
+    const restore = installFakeGame({
+      packs: [exportPack(false, "Item")],
+      actors: [{ _id: "a1", name: "X" }],
+    });
+    await expect(
+      handleCompendiumExport({ pack: "world.my-monsters", type: "Actor", entries: [{ _id: "a1" }] }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    restore();
   });
 });
