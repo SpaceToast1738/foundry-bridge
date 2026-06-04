@@ -23,26 +23,35 @@ describe("parseCredentials", () => {
   it("rejects entries with missing fields", () => {
     expect(() => parseCredentials(JSON.stringify([{ _id: "x" }]))).toThrow();
   });
+
+  it("accepts username / usernames as the login identity (no userid)", () => {
+    const byName = parseCredentials(
+      JSON.stringify([{ _id: "p", hostname: "h", username: "GMBot", password: "x" }]),
+    );
+    expect(byName[0].username).toBe("GMBot");
+    const byList = parseCredentials(
+      JSON.stringify([{ _id: "p", hostname: "h", usernames: ["GMBot", "mcp-bridge"], password: "x" }]),
+    );
+    expect(byList[0].usernames).toEqual(["GMBot", "mcp-bridge"]);
+  });
+
+  it("rejects an entry with no login identity", () => {
+    expect(() =>
+      parseCredentials(JSON.stringify([{ _id: "p", hostname: "h", password: "x" }])),
+    ).toThrow(/login identity/);
+  });
 });
 
 describe("getCredentialsInfo", () => {
-  it("never returns passwords and marks the active entry", () => {
-    const info = getCredentialsInfo(sample, 1);
+  it("never returns passwords, reports the login identity, marks the active entry", () => {
+    const mixed: FoundryCredential[] = [
+      { _id: "alpha", hostname: "a.example", userid: "u1", password: "p1" },
+      { _id: "gamma", hostname: "c.example", username: "GMBot", password: "p3" },
+    ];
+    const info = getCredentialsInfo(mixed, 1);
     expect(info).toEqual([
-      {
-        _id: "alpha",
-        hostname: "a.example",
-        userid: "u1",
-        item_order: 0,
-        currently_active: false,
-      },
-      {
-        _id: "beta",
-        hostname: "b.example",
-        userid: "u2",
-        item_order: 1,
-        currently_active: true,
-      },
+      { _id: "alpha", hostname: "a.example", user: "u1", item_order: 0, currently_active: false },
+      { _id: "gamma", hostname: "c.example", user: "GMBot", item_order: 1, currently_active: true },
     ]);
     expect(JSON.stringify(info)).not.toMatch(/password/);
   });

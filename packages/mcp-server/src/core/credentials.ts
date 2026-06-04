@@ -2,15 +2,28 @@ export interface FoundryCredential {
   _id: string;
   hostname: string;
   password: string;
-  userid: string;
+  /** Login identity — the bridge user's display name (preferred, stable across
+   * worlds), a list of candidate names, or the legacy user document _id. At
+   * least one must be present. */
+  username?: string;
+  usernames?: string[];
+  userid?: string;
 }
 
 export interface CredentialInfo {
   _id: string;
   hostname: string;
-  userid: string;
+  /** The login identity (username / usernames / legacy userid). */
+  user: string;
   item_order: number;
   currently_active: boolean;
+}
+
+/** The configured login identity for display (never the password). */
+function credentialUser(cred: FoundryCredential): string | undefined {
+  if (typeof cred.username === "string") return cred.username;
+  if (Array.isArray(cred.usernames) && cred.usernames.length) return cred.usernames.join("/");
+  return cred.userid;
 }
 
 export function parseCredentials(raw: string): FoundryCredential[] {
@@ -19,16 +32,21 @@ export function parseCredentials(raw: string): FoundryCredential[] {
     throw new Error("Credentials JSON must be an array");
   }
   for (const entry of parsed) {
+    const c = entry as FoundryCredential;
+    const hasIdentity =
+      typeof c?.username === "string" ||
+      (Array.isArray(c?.usernames) && c.usernames.every((n) => typeof n === "string")) ||
+      typeof c?.userid === "string";
     if (
       !entry ||
       typeof entry !== "object" ||
-      typeof (entry as FoundryCredential)._id !== "string" ||
-      typeof (entry as FoundryCredential).hostname !== "string" ||
-      typeof (entry as FoundryCredential).userid !== "string" ||
-      typeof (entry as FoundryCredential).password !== "string"
+      typeof c._id !== "string" ||
+      typeof c.hostname !== "string" ||
+      typeof c.password !== "string" ||
+      !hasIdentity
     ) {
       throw new Error(
-        "Credentials JSON entries must have _id, hostname, userid, and password strings",
+        "Credentials JSON entries must have _id, hostname, password strings and a login identity (username, usernames, or userid)",
       );
     }
   }
@@ -42,7 +60,7 @@ export function getCredentialsInfo(
   return credentials.map((cred, index) => ({
     _id: cred._id,
     hostname: cred.hostname,
-    userid: cred.userid,
+    user: credentialUser(cred) ?? "",
     item_order: index,
     currently_active: index === activeIndex,
   }));
