@@ -32,6 +32,8 @@ import {
   handleEmbeddedUpdate,
 } from "./handlers/embedded.js";
 import {
+  handleCompendiumCreate,
+  handleCompendiumDelete,
   handleCompendiumExport,
   handleCompendiumImport,
   handleCompendiumList,
@@ -159,6 +161,14 @@ const handlers: Partial<Record<Method, Handler>> = {
   [Method.COMPENDIUM_EXPORT]: (params) =>
     handleCompendiumExport(
       params as Parameters<typeof handleCompendiumExport>[0],
+    ),
+  [Method.COMPENDIUM_CREATE]: (params) =>
+    handleCompendiumCreate(
+      params as Parameters<typeof handleCompendiumCreate>[0],
+    ),
+  [Method.COMPENDIUM_DELETE]: (params) =>
+    handleCompendiumDelete(
+      params as Parameters<typeof handleCompendiumDelete>[0],
     ),
   [Method.FOLDERS_CREATE]: (params) =>
     handleFoldersCreate(params as Parameters<typeof handleFoldersCreate>[0]),

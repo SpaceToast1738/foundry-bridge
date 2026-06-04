@@ -28,6 +28,27 @@ interface FoundryPack {
   locked?: boolean;
   getIndex(): Promise<{ contents: Record<string, unknown>[] }>;
   getDocument(id: string): Promise<unknown>;
+  deleteCompendium?: () => Promise<unknown>;
+}
+
+interface CompendiumCollectionClass {
+  createCompendium(
+    metadata: Record<string, unknown>,
+    options?: Record<string, unknown>,
+  ): Promise<{ metadata?: PackMetadata }>;
+}
+
+function getCompendiumClass(): CompendiumCollectionClass {
+  const cls = (globalThis as Record<string, unknown>).CompendiumCollection as
+    | CompendiumCollectionClass
+    | undefined;
+  if (!cls || typeof cls.createCompendium !== "function") {
+    throw new BridgeError(
+      ErrorCode.UNAVAILABLE,
+      "CompendiumCollection.createCompendium is not available in this Foundry version",
+    );
+  }
+  return cls;
 }
 
 function allPacks(): FoundryPack[] {
@@ -194,4 +215,36 @@ export async function handleCompendiumExport(
     count: created.length,
     documents: created.map(docToObject),
   };
+}
+
+export async function handleCompendiumCreate(
+  params: ParamsFor<typeof Method.COMPENDIUM_CREATE>,
+): Promise<{ id?: string; label: string; type: string }> {
+  if (!isWritableDocumentType(params.type)) {
+    throw new BridgeError(
+      ErrorCode.BAD_REQUEST,
+      `Cannot create a pack of type '${params.type}'`,
+    );
+  }
+  const cls = getCompendiumClass();
+  const created = await cls.createCompendium({ type: params.type, label: params.label });
+  return {
+    id: created.metadata?.id,
+    label: created.metadata?.label ?? params.label,
+    type: params.type,
+  };
+}
+
+export async function handleCompendiumDelete(
+  params: ParamsFor<typeof Method.COMPENDIUM_DELETE>,
+): Promise<{ pack: string; deleted: true }> {
+  const pack = getPack(params.pack);
+  if (typeof pack.deleteCompendium !== "function") {
+    throw new BridgeError(
+      ErrorCode.UNAVAILABLE,
+      "This Foundry version doesn't expose pack.deleteCompendium()",
+    );
+  }
+  await pack.deleteCompendium();
+  return { pack: params.pack, deleted: true };
 }

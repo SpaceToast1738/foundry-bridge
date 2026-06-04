@@ -16,6 +16,8 @@ export const Method = {
   COMPENDIUM_SEARCH: "compendium.search",
   COMPENDIUM_IMPORT: "compendium.import",
   COMPENDIUM_EXPORT: "compendium.export",
+  COMPENDIUM_CREATE: "compendium.create",
+  COMPENDIUM_DELETE: "compendium.delete",
   FOLDERS_CREATE: "folders.create",
   FOLDERS_MOVE: "folders.move",
   MESSAGES_CREATE: "messages.create",
@@ -107,6 +109,8 @@ export const methodSchema = z.enum([
   Method.COMPENDIUM_SEARCH,
   Method.COMPENDIUM_IMPORT,
   Method.COMPENDIUM_EXPORT,
+  Method.COMPENDIUM_CREATE,
+  Method.COMPENDIUM_DELETE,
   Method.FOLDERS_CREATE,
   Method.FOLDERS_MOVE,
   Method.MESSAGES_CREATE,
@@ -204,6 +208,7 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.COMPENDIUM_SEARCH]: PermissionTier.READ,
   [Method.COMPENDIUM_IMPORT]: PermissionTier.WRITE,
   [Method.COMPENDIUM_EXPORT]: PermissionTier.WRITE,
+  [Method.COMPENDIUM_CREATE]: PermissionTier.WRITE,
   [Method.MESSAGES_CREATE]: PermissionTier.WRITE,
   [Method.SCENE_ACTIVE]: PermissionTier.READ,
   [Method.SCENE_ACTIVATE]: PermissionTier.WRITE,
@@ -275,6 +280,7 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.MACRO_EXECUTE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
+  [Method.COMPENDIUM_DELETE]: PermissionTier.DESTRUCTIVE,
 };
 
 const docRefSchema = z
@@ -370,6 +376,13 @@ export const paramSchemas = {
     pack: z.string().min(1),
     type: z.string().min(1),
     entries: z.array(docRefSchema).min(1),
+  }),
+  [Method.COMPENDIUM_CREATE]: z.object({
+    label: z.string().min(1),
+    type: z.string().min(1),
+  }),
+  [Method.COMPENDIUM_DELETE]: z.object({
+    pack: z.string().min(1),
   }),
   [Method.FOLDERS_CREATE]: z.object({
     type: z.string().min(1),

@@ -581,6 +581,31 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "create_compendium",
+    description:
+      "Create a new (empty) world compendium pack to hold homebrew content. `label` is the display name; `type` is the document type it holds (Actor/Item/JournalEntry/RollTable/…). Returns the new pack `id` (e.g. \"world.homebrew-items\") — then fill it with export_to_compendium / import_from_compendium.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        label: { type: "string", description: "Display name, e.g. \"Homebrew Items\"." },
+        type: { type: "string", description: "Document type the pack holds (e.g. \"Item\")." },
+      },
+      required: ["label", "type"],
+    },
+  });
+
+  tools.push({
+    name: "delete_compendium",
+    description:
+      "Delete a world compendium pack by id. Permanent — removes the pack and all its entries. Destructive-tier gated.",
+    inputSchema: {
+      type: "object",
+      properties: { pack: { type: "string", description: "Pack id, e.g. \"world.homebrew-items\"." } },
+      required: ["pack"],
+    },
+  });
+
+  tools.push({
     name: "post_chat_message",
     description:
       "Post a message to the Foundry chat log. By default visible to everyone; set whisper to \"gm\" (or a list of user refs) to restrict it. Use sparingly — it appears live in players' chat unless whispered.",
@@ -1482,6 +1507,10 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMPENDIUM_IMPORT, params);
     case "export_to_compendium":
       return ctx.relay.call(Method.COMPENDIUM_EXPORT, params);
+    case "create_compendium":
+      return ctx.relay.call(Method.COMPENDIUM_CREATE, params);
+    case "delete_compendium":
+      return ctx.relay.call(Method.COMPENDIUM_DELETE, params);
     case "browse_files":
       return ctx.relay.call(Method.FILES_BROWSE, params);
     case "upload_image":

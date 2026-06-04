@@ -1,4 +1,6 @@
 import {
+  handleCompendiumCreate,
+  handleCompendiumDelete,
   handleCompendiumExport,
   handleCompendiumImport,
   handleCompendiumList,
@@ -112,6 +114,55 @@ describe("compendium export", () => {
     await expect(
       handleCompendiumExport({ pack: "world.my-monsters", type: "Actor", entries: [{ _id: "a1" }] }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    restore();
+  });
+});
+
+describe("compendium create / delete", () => {
+  it("creates a new world pack via CompendiumCollection.createCompendium", async () => {
+    const restore = installFakeGame({ packs: [] });
+    let createdWith: Record<string, unknown> | undefined;
+    (globalThis as Record<string, unknown>).CompendiumCollection = {
+      createCompendium: async (metadata: Record<string, unknown>) => {
+        createdWith = metadata;
+        return { metadata: { id: "world.homebrew-items", label: metadata.label } };
+      },
+    };
+    const res = await handleCompendiumCreate({ label: "Homebrew Items", type: "Item" });
+    expect(createdWith).toMatchObject({ type: "Item", label: "Homebrew Items" });
+    expect(res).toMatchObject({ id: "world.homebrew-items", label: "Homebrew Items", type: "Item" });
+    delete (globalThis as Record<string, unknown>).CompendiumCollection;
+    restore();
+  });
+
+  it("rejects an unknown pack type with BAD_REQUEST", async () => {
+    const restore = installFakeGame({ packs: [] });
+    (globalThis as Record<string, unknown>).CompendiumCollection = { createCompendium: async () => ({}) };
+    await expect(
+      handleCompendiumCreate({ label: "X", type: "Bogus" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    delete (globalThis as Record<string, unknown>).CompendiumCollection;
+    restore();
+  });
+
+  it("deletes a pack via deleteCompendium()", async () => {
+    let deleted = false;
+    const restore = installFakeGame({
+      packs: [
+        {
+          metadata: { id: "world.homebrew-items", label: "Homebrew", type: "Item" },
+          documentName: "Item",
+          getIndex: async () => ({ contents: [] }),
+          getDocument: async () => undefined,
+          deleteCompendium: async () => {
+            deleted = true;
+          },
+        },
+      ],
+    });
+    const res = await handleCompendiumDelete({ pack: "world.homebrew-items" });
+    expect(res).toMatchObject({ pack: "world.homebrew-items", deleted: true });
+    expect(deleted).toBe(true);
     restore();
   });
 });

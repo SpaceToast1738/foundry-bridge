@@ -211,6 +211,9 @@ the world until imported.
 - `export_to_compendium { pack, type, entries: [{ _id|name }] }` — the reverse: write world documents
   INTO a pack (campaign backups / authoring). `type` is the document type; the pack must be **unlocked**
   (else `FORBIDDEN`) and hold that type. Fresh `_id`s are assigned in the pack.
+- `create_compendium { label, type }` — make a new (empty) world pack for homebrew (`type` = the document
+  type it holds, e.g. `Item`). Returns the new `pack` id (e.g. `world.homebrew-items`); then fill it with
+  `export_to_compendium`. `delete_compendium { pack }` removes a pack (destructive tier; permanent).
 
 Prefer importing system content over hand-building it. Import first, then inspect/modify the world copy.
 

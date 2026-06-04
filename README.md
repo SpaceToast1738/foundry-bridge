@@ -112,6 +112,8 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `search_compendium` | read | Search a pack's index by name; returns `_id`, `name`, `type`, `uuid`, `img`. |
 | `import_from_compendium` | write | Import pack entries into the world as real documents (optional destination folder; fresh `_id`s). |
 | `export_to_compendium` | write | Write world documents back INTO a pack (backups/authoring). Pack must be unlocked and hold that `type`; fresh `_id`s. |
+| `create_compendium` | write | Create a new empty world pack (`label`, `type`) for homebrew; returns its `id`. |
+| `delete_compendium` | destructive | Delete a world pack and all its entries by `id`. Permanent. |
 
 ### Chat
 | Tool | Tier | Description |
