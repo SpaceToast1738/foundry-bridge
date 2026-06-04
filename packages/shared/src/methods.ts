@@ -78,6 +78,8 @@ export const Method = {
   DND5E_HIT_DICE: "dnd5e.hit_dice",
   DND5E_DEATH_SAVES: "dnd5e.death_saves",
   DND5E_CONCENTRATION: "dnd5e.concentration",
+  PLAYLIST_CREATE: "playlist.create",
+  PLAYLIST_ADD_SOUNDS: "playlist.add_sounds",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -160,6 +162,8 @@ export const methodSchema = z.enum([
   Method.DND5E_HIT_DICE,
   Method.DND5E_DEATH_SAVES,
   Method.DND5E_CONCENTRATION,
+  Method.PLAYLIST_CREATE,
+  Method.PLAYLIST_ADD_SOUNDS,
 ]);
 
 export const PermissionTier = {
@@ -245,6 +249,8 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.DND5E_HIT_DICE]: PermissionTier.WRITE,
   [Method.DND5E_DEATH_SAVES]: PermissionTier.WRITE,
   [Method.DND5E_CONCENTRATION]: PermissionTier.WRITE,
+  [Method.PLAYLIST_CREATE]: PermissionTier.WRITE,
+  [Method.PLAYLIST_ADD_SOUNDS]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.MACRO_EXECUTE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
@@ -633,6 +639,33 @@ export const paramSchemas = {
   [Method.DND5E_CONCENTRATION]: z.object({
     actor: docRefSchema,
     action: z.enum(["check", "break"]),
+  }),
+  [Method.PLAYLIST_CREATE]: z.object({
+    name: z.string().min(1),
+    mode: z.number().int().min(-1).max(2).optional(),
+    sounds: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          path: z.string().min(1),
+          repeat: z.boolean().optional(),
+          volume: z.number().min(0).max(1).optional(),
+        }),
+      )
+      .optional(),
+  }),
+  [Method.PLAYLIST_ADD_SOUNDS]: z.object({
+    playlist: docRefSchema,
+    sounds: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          path: z.string().min(1),
+          repeat: z.boolean().optional(),
+          volume: z.number().min(0).max(1).optional(),
+        }),
+      )
+      .min(1),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

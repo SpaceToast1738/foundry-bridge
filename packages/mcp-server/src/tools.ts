@@ -774,6 +774,46 @@ export function buildToolDefinitions(): ToolDef[] {
     },
   });
 
+  const playlistSoundSchema = {
+    type: "object",
+    properties: {
+      name: { type: "string" },
+      path: { type: "string", description: "Audio file path." },
+      repeat: { type: "boolean" },
+      volume: { type: "number", minimum: 0, maximum: 1, description: "0–1 (default 0.5)." },
+    },
+    required: ["name", "path"],
+  } as const;
+
+  tools.push({
+    name: "create_playlist",
+    description:
+      "Create a playlist, optionally with sounds. `mode`: 0 sequential (default), 1 shuffle, 2 simultaneous, -1 soundboard. Each sound is {name, path, repeat?, volume?}.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        mode: { type: "integer", enum: [-1, 0, 1, 2] },
+        sounds: { type: "array", items: playlistSoundSchema },
+      },
+      required: ["name"],
+    },
+  });
+
+  tools.push({
+    name: "add_playlist_sounds",
+    description:
+      "Add sounds to an existing playlist (by `_id`/`name`). Each sound is {name, path, repeat?, volume?}. Remove with delete_embedded \"PlaylistSound\".",
+    inputSchema: {
+      type: "object",
+      properties: {
+        playlist: docRefSchema,
+        sounds: { type: "array", items: playlistSoundSchema },
+      },
+      required: ["playlist", "sounds"],
+    },
+  });
+
   tools.push({
     name: "get_messages",
     description:
@@ -1362,6 +1402,10 @@ export async function dispatchTool(
       return ctx.relay.call(Method.PLAYLIST_STOP, params);
     case "play_sound":
       return ctx.relay.call(Method.PLAYLIST_PLAY_SOUND, params);
+    case "create_playlist":
+      return ctx.relay.call(Method.PLAYLIST_CREATE, params);
+    case "add_playlist_sounds":
+      return ctx.relay.call(Method.PLAYLIST_ADD_SOUNDS, params);
     case "get_messages":
       return ctx.relay.call(Method.MESSAGES_LIST, params);
     case "roll_to_chat":

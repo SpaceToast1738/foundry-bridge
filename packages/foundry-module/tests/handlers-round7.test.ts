@@ -5,6 +5,10 @@ import {
   handleNotePlace,
   handleSceneCreate,
 } from "../src/handlers/scenes";
+import {
+  handlePlaylistAddSounds,
+  handlePlaylistCreate,
+} from "../src/handlers/audio";
 import { installFakeGame, type FakeDoc } from "./helpers/fake-game";
 
 describe("create_scene", () => {
@@ -123,6 +127,52 @@ describe("place_light / place_note", () => {
     await expect(
       handleNotePlace({ x: 1, y: 2, journal: { _id: "nope" } }),
     ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+    restore();
+  });
+});
+
+describe("playlist building", () => {
+  it("creates a playlist with sounds and adds more", async () => {
+    const embeds: { kind: string; data: Record<string, unknown>[] }[] = [];
+    const sounds: unknown[] = [];
+    function makePlaylist(name: string): FakeDoc {
+      return {
+        _id: "p1",
+        id: "p1",
+        name,
+        sounds: { get size() { return sounds.length; }, contents: sounds },
+        createEmbeddedDocuments: async (kind: string, data: Record<string, unknown>[]) => {
+          embeds.push({ kind, data });
+          sounds.push(...data);
+          return data.map((d, i) => ({ _id: `s${i}`, ...d }));
+        },
+      } as unknown as FakeDoc;
+    }
+    const playlist = makePlaylist("Tavern");
+    const restore = installFakeGame({ playlists: [playlist] });
+    (globalThis as Record<string, unknown>).Playlist = {
+      createDocuments: async (data: Record<string, unknown>[]) => {
+        (playlist as { name?: string }).name = data[0].name as string;
+        return [playlist];
+      },
+      updateDocuments: async () => [],
+      deleteDocuments: async () => [],
+    };
+
+    const created = await handlePlaylistCreate({
+      name: "Tavern",
+      mode: 1,
+      sounds: [{ name: "Lute", path: "music/lute.ogg", volume: 0.4 }],
+    });
+    expect(created).toMatchObject({ playlist: "p1", name: "Tavern", sounds: 1 });
+    expect(embeds[0].kind).toBe("PlaylistSound");
+    expect(embeds[0].data[0]).toMatchObject({ name: "Lute", path: "music/lute.ogg", repeat: false, volume: 0.4 });
+
+    const added = await handlePlaylistAddSounds({
+      playlist: { _id: "p1" },
+      sounds: [{ name: "Crowd", path: "amb/crowd.ogg" }],
+    });
+    expect(added).toMatchObject({ playlist: "p1", added: 1, sounds: 2 });
     restore();
   });
 });

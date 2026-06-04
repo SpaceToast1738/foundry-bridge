@@ -20,6 +20,8 @@ import {
 import { handleDocumentsSearch } from "./handlers/search.js";
 import { handleTableCreate, handleTableAddResults } from "./handlers/tables.js";
 import {
+  handlePlaylistAddSounds,
+  handlePlaylistCreate,
   handlePlaylistPlay,
   handlePlaylistPlaySound,
   handlePlaylistStop,
@@ -274,6 +276,10 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleDnd5eDeathSaves(params as Parameters<typeof handleDnd5eDeathSaves>[0]),
   [Method.DND5E_CONCENTRATION]: (params) =>
     handleDnd5eConcentration(params as Parameters<typeof handleDnd5eConcentration>[0]),
+  [Method.PLAYLIST_CREATE]: (params) =>
+    handlePlaylistCreate(params as Parameters<typeof handlePlaylistCreate>[0]),
+  [Method.PLAYLIST_ADD_SOUNDS]: (params) =>
+    handlePlaylistAddSounds(params as Parameters<typeof handlePlaylistAddSounds>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {
