@@ -3,17 +3,31 @@
 # Drop into your Caddy config (Caddyfile import or directly under your
 # top-level Caddyfile). Caddy will obtain a TLS cert via ACME automatically.
 #
-# Required env var (e.g. in /etc/default/caddy):
-#   MCP_BRIDGE_TOKEN=<long random string shared with the MCP client>
+# Required env vars (e.g. in /etc/default/caddy):
+#   MCP_BRIDGE_TOKEN=<long random string>   # Authorization: Bearer <value>  (desktop / mcp-remote)
+#   MCP_BRIDGE_PATH=<long random string>     # secret URL path for header-less clients (Claude phone/web connector)
+#   FOUNDRY_BRIDGE_GATEWAY_PORT=31415
+#
+# Generate each secret with:  openssl rand -hex 32  — keep them DIFFERENT, rotate if exposed.
 
 foundry-mcp.spencer-net.com {
     encode zstd gzip
 
-    # Block anything without the right bearer token. The matcher checks the
-    # exact header value; Caddy returns a fall-through 401 below if it misses.
+    # --- Header-less access (Claude custom connector on phone/web) ---
+    # Claude's connector dialog can't send a static bearer header, so the secret
+    # *path* is the credential. Connector URL:
+    #   https://foundry-mcp.spencer-net.com/<MCP_BRIDGE_PATH>/mcp
+    # handle_path strips the /<secret> prefix, so the gateway still sees /mcp.
+    # NOTE: MCP_BRIDGE_PATH MUST be a long random value — if it's empty this route
+    # only matches "//..." paths (fail-closed) and normal /mcp still needs the bearer.
+    handle_path /{$MCP_BRIDGE_PATH}/* {
+        log_skip                       # keep the secret out of the access log
+        reverse_proxy 127.0.0.1:{$FOUNDRY_BRIDGE_GATEWAY_PORT}
+    }
+
+    # --- Header-based access (desktop via mcp-remote --header) ---
     @authed header Authorization "Bearer {$MCP_BRIDGE_TOKEN}"
     handle @authed {
-        # supergateway listens on this port (see /etc/foundry-bridge/env).
         reverse_proxy 127.0.0.1:{$FOUNDRY_BRIDGE_GATEWAY_PORT}
     }
 

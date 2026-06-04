@@ -164,17 +164,35 @@ In the browser journal you should see `[launcher][info] joined world` followed b
 ```bash
 cp deploy/caddy/foundry-mcp.spencer-net.com.Caddyfile \
   /etc/caddy/sites-available/foundry-mcp.spencer-net.com.Caddyfile
-# Wire MCP_BRIDGE_TOKEN + FOUNDRY_BRIDGE_GATEWAY_PORT into Caddy's environment.
+# Wire the secrets + gateway port into Caddy's environment.
 # On Debian/Ubuntu this is /etc/default/caddy:
-cat >> /etc/default/caddy <<'EOF'
-MCP_BRIDGE_TOKEN=__paste_the_openssl_rand_value__
+cat >> /etc/default/caddy <<EOF
+MCP_BRIDGE_TOKEN=$(openssl rand -hex 32)
+MCP_BRIDGE_PATH=$(openssl rand -hex 32)
 FOUNDRY_BRIDGE_GATEWAY_PORT=31415
 EOF
 # Import the new site (if your main Caddyfile uses `import sites-available/*`).
 systemctl restart caddy
 ```
 
-Caddy will fetch a TLS cert via ACME on first request.
+Caddy will fetch a TLS cert via ACME on first request. `MCP_BRIDGE_TOKEN` gates the header-based
+(desktop) path; `MCP_BRIDGE_PATH` is the secret URL prefix for header-less clients (see *Phone / mobile*).
+
+## 6b. Phone / mobile access (Claude custom connector)
+
+Claude's **custom connector** dialog (claude.ai → Settings → Connectors → Add custom connector; Pro/Max;
+syncs to the mobile app) authenticates via OAuth or an open URL — it can't send a static bearer header.
+The Caddyfile therefore also exposes a **secret-path** route: the random `MCP_BRIDGE_PATH` segment *is*
+the credential, so no header is needed. Add this URL as the connector (leave auth empty):
+
+```
+https://foundry-mcp.spencer-net.com/<MCP_BRIDGE_PATH>/mcp
+```
+
+`handle_path` strips the `/<secret>` prefix so the gateway still sees `/mcp`, and `log_skip` keeps the
+secret out of the access log. **Caveats:** the secret lives in the URL (stored in your Claude account) and
+grants full GM access — use a long random value and rotate it if exposed. (The desktop keeps using the
+`Authorization: Bearer $MCP_BRIDGE_TOKEN` header via `mcp-remote`.)
 
 ## 7. Smoke test from outside the VPS
 
