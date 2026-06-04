@@ -105,11 +105,13 @@ install -o root -g foundry-bridge -m 640 \
 chmod 600 /etc/foundry-bridge/credentials.json
 ```
 
-The `userid` is the Foundry document `_id` of the `mcp-bridge` user. Get it from the GM console:
+Set **`username`** to the bridge user's display name (e.g. `mcp-bridge`). The launcher matches the
+`/join` user dropdown by this name, which is **stable across worlds** — so rebuilding or replacing a
+world doesn't break login.
 
-```js
-game.users.getName("mcp-bridge").id
-```
+> Legacy alternative: a `userid` field (the Foundry user **document `_id`**) is still accepted as a
+> fallback, but it is **regenerated whenever a world is rebuilt**, so prefer `username`. If you must use
+> it, fetch it from the GM console: `game.users.getName("mcp-bridge").id`.
 
 Place the env file:
 

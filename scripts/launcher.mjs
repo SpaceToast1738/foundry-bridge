@@ -43,10 +43,19 @@ function loadActiveCredential() {
       `No credential matched FOUNDRY_BRIDGE_CREDENTIAL_ID=${ACTIVE_ID}`,
     );
   }
-  for (const field of ["hostname", "userid", "password"]) {
+  for (const field of ["hostname", "password"]) {
     if (typeof active[field] !== "string") {
       throw new Error(`Credential is missing string field '${field}'`);
     }
+  }
+  // Need at least one way to identify the user: `username` (the display name,
+  // stable across worlds — preferred) or `userid` (the user document _id,
+  // which is regenerated whenever a world is rebuilt — brittle, kept for
+  // backwards compatibility).
+  if (typeof active.username !== "string" && typeof active.userid !== "string") {
+    throw new Error(
+      "Credential needs a 'username' (preferred) or 'userid' field",
+    );
   }
   return active;
 }
@@ -80,7 +89,37 @@ async function joinWorld(page, cred) {
       "Foundry /join form did not expose a userid select (world may not be running, or selector changed)",
     );
   }
-  await userSelect.selectOption(cred.userid);
+  // Prefer matching by username (the option's visible label) — it's stable
+  // across worlds. Fall back to userid (the option's value = user document
+  // _id), which changes whenever a world is rebuilt. On failure, enumerate the
+  // available users so the journal says exactly what's wrong.
+  try {
+    if (typeof cred.username === "string") {
+      await userSelect.selectOption({ label: cred.username });
+    } else {
+      await userSelect.selectOption(cred.userid);
+    }
+  } catch {
+    const options = await userSelect
+      .locator("option")
+      .evaluateAll((els) =>
+        els
+          .map((e) => ({ value: e.value, label: (e.textContent || "").trim() }))
+          .filter((o) => o.value),
+      );
+    const want = typeof cred.username === "string"
+      ? `username '${cred.username}'`
+      : `userid '${cred.userid}'`;
+    log(
+      "error",
+      `bridge user ${want} not found in the launched world; available users: ${JSON.stringify(options)}`,
+    );
+    throw new Error(
+      `Configured bridge user (${want}) is not in the launched world. ` +
+        `Available: ${options.map((o) => o.label).join(", ") || "(none)"}. ` +
+        "Set credential.username to the bridge user's display name, or update userid to its current document _id.",
+    );
+  }
 
   const passwordField = page.locator('input[name="password"]');
   if (await passwordField.count()) {
