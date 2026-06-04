@@ -420,7 +420,7 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "add_combatants",
     description:
-      "Add combatants to a combat from token _ids on its scene. Defaults to the active combat. (Place tokens first with place_token.)",
+      "Add combatants to a combat from token _ids on its scene. Defaults to the active combat. (Place tokens first with place_token.) Set roll_initiative to roll for the added combatants immediately.",
     inputSchema: {
       type: "object",
       properties: {
@@ -430,6 +430,7 @@ export function buildToolDefinitions(): ToolDef[] {
           items: { type: "string" },
           description: "Token _ids to add as combatants.",
         },
+        roll_initiative: { type: "boolean", description: "Roll initiative for the added combatants." },
       },
       required: ["tokens"],
     },
@@ -1101,6 +1102,55 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "damage_combatant",
+    description:
+      "Apply damage to a combatant's actor by combatant `_id` (defaults to the active combat). On a dnd5e world this respects damage `type`/resistances; elsewhere it's a flat HP hit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        combat: docRefSchema,
+        combatant: { type: "string", description: "Combatant _id." },
+        amount: { type: "integer", description: "Damage amount (positive)." },
+        type: { type: "string", description: "Damage type (5e), e.g. \"fire\"." },
+      },
+      required: ["combatant", "amount"],
+    },
+  });
+
+  tools.push({
+    name: "update_combatant",
+    description:
+      "Update a combatant in place (defaults to the active combat): `defeated` (skull), `hidden` (hide from players), and/or `initiative`.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        combat: docRefSchema,
+        combatant: { type: "string", description: "Combatant _id." },
+        defeated: { type: "boolean" },
+        hidden: { type: "boolean" },
+        initiative: { type: "number" },
+      },
+      required: ["combatant"],
+    },
+  });
+
+  tools.push({
+    name: "combatant_condition",
+    description:
+      "Toggle a status condition on a combatant's actor by combatant `_id` (e.g. \"prone\", \"poisoned\"). Omit `active` to flip. Defaults to the active combat.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        combat: docRefSchema,
+        combatant: { type: "string", description: "Combatant _id." },
+        condition: { type: "string", description: "Status effect id." },
+        active: { type: "boolean", description: "Force on/off; omit to toggle." },
+      },
+      required: ["combatant", "condition"],
+    },
+  });
+
+  tools.push({
     name: "execute_macro",
     description:
       "Run a stored macro by `_id`/`name`, optionally passing a `scope` object. Runs arbitrary stored code — gated behind the destructive tier.",
@@ -1426,6 +1476,12 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMBAT_SET_INITIATIVE, params);
     case "remove_combatant":
       return ctx.relay.call(Method.COMBAT_REMOVE, params);
+    case "damage_combatant":
+      return ctx.relay.call(Method.COMBATANT_DAMAGE, params);
+    case "update_combatant":
+      return ctx.relay.call(Method.COMBATANT_UPDATE, params);
+    case "combatant_condition":
+      return ctx.relay.call(Method.COMBATANT_CONDITION, params);
     case "execute_macro":
       return ctx.relay.call(Method.MACRO_EXECUTE, params);
     case "get_status": {

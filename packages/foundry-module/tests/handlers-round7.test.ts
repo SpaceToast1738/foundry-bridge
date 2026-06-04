@@ -9,6 +9,12 @@ import {
   handlePlaylistAddSounds,
   handlePlaylistCreate,
 } from "../src/handlers/audio";
+import {
+  handleCombatAdd,
+  handleCombatantCondition,
+  handleCombatantDamage,
+  handleCombatantUpdate,
+} from "../src/handlers/combat";
 import { installFakeGame, type FakeDoc } from "./helpers/fake-game";
 
 describe("create_scene", () => {
@@ -173,6 +179,79 @@ describe("playlist building", () => {
       sounds: [{ name: "Crowd", path: "amb/crowd.ogg" }],
     });
     expect(added).toMatchObject({ playlist: "p1", added: 1, sounds: 2 });
+    restore();
+  });
+});
+
+describe("combat conveniences", () => {
+  function makeCombat(log: string[], damageCalls: unknown[][], conditionCalls: unknown[][]) {
+    const actor = {
+      applyDamage: async (...args: unknown[]) => {
+        damageCalls.push(args);
+      },
+      toggleStatusEffect: async (id: string, opts: Record<string, unknown>) => {
+        conditionCalls.push([id, opts]);
+      },
+    };
+    const combatant = { id: "c1", _id: "c1", name: "Goblin", actor };
+    return {
+      id: "cmb1",
+      round: 1,
+      turn: 0,
+      scene: { id: "s1" },
+      combatants: { contents: [combatant], get: (id: string) => (id === "c1" ? combatant : undefined) },
+      createEmbeddedDocuments: async (_n: string, data: Record<string, unknown>[]) =>
+        data.map((_, i) => ({ id: `new${i}`, _id: `new${i}` })),
+      updateEmbeddedDocuments: async (_n: string, updates: Record<string, unknown>[]) => {
+        log.push("update:" + JSON.stringify(updates[0]));
+        return updates;
+      },
+      rollInitiative: async (ids: string[]) => {
+        log.push("rollInit:" + ids.join(","));
+      },
+      rollAll: async () => {},
+      setInitiative: async () => {},
+      deleteEmbeddedDocuments: async () => [],
+      startCombat: async () => {},
+      nextTurn: async () => {},
+      previousTurn: async () => {},
+      nextRound: async () => {},
+      previousRound: async () => {},
+      endCombat: async () => {},
+    };
+  }
+
+  it("rolls initiative for newly added combatants when asked", async () => {
+    const log: string[] = [];
+    const restore = installFakeGame({ combat: makeCombat(log, [], []), scenes: [{ _id: "s1", id: "s1", name: "M" } as never], activeSceneId: "s1" });
+    await handleCombatAdd({ tokens: ["t1"], roll_initiative: true });
+    expect(log.some((l) => l.startsWith("rollInit:new0"))).toBe(true);
+    restore();
+  });
+
+  it("damages the combatant's actor (typed array form)", async () => {
+    const damageCalls: unknown[][] = [];
+    const restore = installFakeGame({ combat: makeCombat([], damageCalls, []) });
+    const r = await handleCombatantDamage({ combatant: "c1", amount: 8, type: "fire" });
+    expect(r).toMatchObject({ combatant: "c1", damage: 8, type: "fire" });
+    expect(damageCalls[0][0]).toEqual([{ value: 8, type: "fire" }]);
+    restore();
+  });
+
+  it("updates defeated/hidden", async () => {
+    const log: string[] = [];
+    const restore = installFakeGame({ combat: makeCombat(log, [], []) });
+    await handleCombatantUpdate({ combatant: "c1", defeated: true, hidden: true });
+    expect(log[0]).toContain('"defeated":true');
+    expect(log[0]).toContain('"hidden":true');
+    restore();
+  });
+
+  it("toggles a condition on the combatant's actor", async () => {
+    const conditionCalls: unknown[][] = [];
+    const restore = installFakeGame({ combat: makeCombat([], [], conditionCalls) });
+    await handleCombatantCondition({ combatant: "c1", condition: "prone", active: true });
+    expect(conditionCalls[0]).toEqual(["prone", { active: true }]);
     restore();
   });
 });

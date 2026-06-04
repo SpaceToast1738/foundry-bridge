@@ -12,20 +12,26 @@ import {
   getCollection,
 } from "../collections.js";
 
+interface ActorLike {
+  applyDamage?: (...args: unknown[]) => Promise<unknown>;
+  toggleStatusEffect?: (id: string, options?: Record<string, unknown>) => Promise<unknown>;
+}
 interface CombatantDoc {
   id?: string;
   _id?: string;
   name?: string;
   initiative?: number | null;
   tokenId?: string;
+  actor?: ActorLike;
 }
 interface CombatDoc {
   id?: string;
   round?: number;
   turn?: number;
   scene?: { id?: string };
-  combatants?: { contents?: CombatantDoc[] };
+  combatants?: { contents?: CombatantDoc[]; get?: (id: string) => CombatantDoc | undefined };
   createEmbeddedDocuments(name: string, data: Record<string, unknown>[]): Promise<unknown[]>;
+  updateEmbeddedDocuments(name: string, updates: Record<string, unknown>[]): Promise<unknown[]>;
   rollAll(): Promise<unknown>;
   rollInitiative(ids: string[]): Promise<unknown>;
   startCombat(): Promise<unknown>;
@@ -38,6 +44,16 @@ interface CombatDoc {
   setInitiative(combatantId: string, value: number): Promise<unknown>;
   deleteEmbeddedDocuments(name: string, ids: string[]): Promise<unknown[]>;
   activate?(): Promise<unknown>;
+}
+
+function findCombatant(combat: CombatDoc, id: string): CombatantDoc {
+  const cb =
+    combat.combatants?.get?.(id) ??
+    (combat.combatants?.contents ?? []).find((c) => (c.id ?? c._id) === id);
+  if (!cb) {
+    throw new BridgeError(ErrorCode.NOT_FOUND, `Combatant ${id} not found in this combat`);
+  }
+  return cb;
 }
 interface CombatCtor {
   create(data: Record<string, unknown>): Promise<CombatDoc>;
@@ -131,11 +147,73 @@ export async function handleCombatAdd(
 ): Promise<Record<string, unknown>> {
   const combat = resolveCombat(params.combat);
   const sceneId = combat.scene?.id ?? activeSceneId();
-  await combat.createEmbeddedDocuments(
+  const created = await combat.createEmbeddedDocuments(
     "Combatant",
     params.tokens.map((tokenId) => ({ tokenId, sceneId })),
   );
+  if (params.roll_initiative) {
+    const ids = created
+      .map((c) => (c as CombatantDoc).id ?? (c as CombatantDoc)._id)
+      .filter((id): id is string => typeof id === "string");
+    if (ids.length) await combat.rollInitiative(ids);
+  }
   return combatState(combat);
+}
+
+async function damageActor(actor: ActorLike, amount: number, type: string | undefined): Promise<void> {
+  if (typeof actor.applyDamage !== "function") {
+    throw new BridgeError(ErrorCode.UNAVAILABLE, "The combatant's actor has no applyDamage()");
+  }
+  // 5e accepts [{value,type}]; other systems take a scalar. Try typed, fall back.
+  try {
+    await actor.applyDamage([{ value: amount, type: type ?? "" }], {});
+  } catch {
+    await actor.applyDamage(amount);
+  }
+}
+
+export async function handleCombatantDamage(
+  params: ParamsFor<typeof Method.COMBATANT_DAMAGE>,
+): Promise<Record<string, unknown>> {
+  const combat = resolveCombat(params.combat);
+  const combatant = findCombatant(combat, params.combatant);
+  if (!combatant.actor) {
+    throw new BridgeError(ErrorCode.UNAVAILABLE, "Combatant has no linked actor");
+  }
+  await damageActor(combatant.actor, Math.abs(params.amount), params.type);
+  return { combat: combat.id, combatant: params.combatant, damage: Math.abs(params.amount), type: params.type ?? "untyped" };
+}
+
+export async function handleCombatantUpdate(
+  params: ParamsFor<typeof Method.COMBATANT_UPDATE>,
+): Promise<Record<string, unknown>> {
+  const combat = resolveCombat(params.combat);
+  const update: Record<string, unknown> = { _id: params.combatant };
+  if (params.defeated !== undefined) update.defeated = params.defeated;
+  if (params.hidden !== undefined) update.hidden = params.hidden;
+  if (params.initiative !== undefined) update.initiative = params.initiative;
+  const updated = await combat.updateEmbeddedDocuments("Combatant", [update]);
+  if (updated.length === 0) {
+    throw new BridgeError(ErrorCode.NOT_FOUND, `Combatant ${params.combatant} not found in this combat`);
+  }
+  return combatState(combat);
+}
+
+export async function handleCombatantCondition(
+  params: ParamsFor<typeof Method.COMBATANT_CONDITION>,
+): Promise<Record<string, unknown>> {
+  const combat = resolveCombat(params.combat);
+  const combatant = findCombatant(combat, params.combatant);
+  const actor = combatant.actor;
+  if (!actor || typeof actor.toggleStatusEffect !== "function") {
+    throw new BridgeError(
+      ErrorCode.UNAVAILABLE,
+      "The combatant's actor doesn't support toggleStatusEffect()",
+    );
+  }
+  const options = params.active === undefined ? {} : { active: params.active };
+  await actor.toggleStatusEffect(params.condition, options);
+  return { combat: combat.id, combatant: params.combatant, condition: params.condition };
 }
 
 export async function handleCombatRollInitiative(

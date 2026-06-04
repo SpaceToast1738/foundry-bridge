@@ -62,6 +62,9 @@ import {
 import {
   handleCombatAdd,
   handleCombatAdvance,
+  handleCombatantCondition,
+  handleCombatantDamage,
+  handleCombatantUpdate,
   handleCombatCreate,
   handleCombatRemove,
   handleCombatRollInitiative,
@@ -280,6 +283,12 @@ const handlers: Partial<Record<Method, Handler>> = {
     handlePlaylistCreate(params as Parameters<typeof handlePlaylistCreate>[0]),
   [Method.PLAYLIST_ADD_SOUNDS]: (params) =>
     handlePlaylistAddSounds(params as Parameters<typeof handlePlaylistAddSounds>[0]),
+  [Method.COMBATANT_DAMAGE]: (params) =>
+    handleCombatantDamage(params as Parameters<typeof handleCombatantDamage>[0]),
+  [Method.COMBATANT_UPDATE]: (params) =>
+    handleCombatantUpdate(params as Parameters<typeof handleCombatantUpdate>[0]),
+  [Method.COMBATANT_CONDITION]: (params) =>
+    handleCombatantCondition(params as Parameters<typeof handleCombatantCondition>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

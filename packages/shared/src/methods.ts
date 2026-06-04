@@ -80,6 +80,9 @@ export const Method = {
   DND5E_CONCENTRATION: "dnd5e.concentration",
   PLAYLIST_CREATE: "playlist.create",
   PLAYLIST_ADD_SOUNDS: "playlist.add_sounds",
+  COMBATANT_DAMAGE: "combat.damage_combatant",
+  COMBATANT_UPDATE: "combat.update_combatant",
+  COMBATANT_CONDITION: "combat.combatant_condition",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -164,6 +167,9 @@ export const methodSchema = z.enum([
   Method.DND5E_CONCENTRATION,
   Method.PLAYLIST_CREATE,
   Method.PLAYLIST_ADD_SOUNDS,
+  Method.COMBATANT_DAMAGE,
+  Method.COMBATANT_UPDATE,
+  Method.COMBATANT_CONDITION,
 ]);
 
 export const PermissionTier = {
@@ -251,6 +257,9 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.DND5E_CONCENTRATION]: PermissionTier.WRITE,
   [Method.PLAYLIST_CREATE]: PermissionTier.WRITE,
   [Method.PLAYLIST_ADD_SOUNDS]: PermissionTier.WRITE,
+  [Method.COMBATANT_DAMAGE]: PermissionTier.WRITE,
+  [Method.COMBATANT_UPDATE]: PermissionTier.WRITE,
+  [Method.COMBATANT_CONDITION]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.MACRO_EXECUTE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
@@ -386,6 +395,7 @@ export const paramSchemas = {
   [Method.COMBAT_ADD]: z.object({
     combat: docRefSchema.optional(),
     tokens: z.array(z.string().min(1)).min(1),
+    roll_initiative: z.boolean().optional(),
   }),
   [Method.COMBAT_ROLL_INITIATIVE]: z.object({
     combat: docRefSchema.optional(),
@@ -666,6 +676,30 @@ export const paramSchemas = {
         }),
       )
       .min(1),
+  }),
+  [Method.COMBATANT_DAMAGE]: z.object({
+    combat: docRefSchema.optional(),
+    combatant: z.string().min(1),
+    amount: z.number().int(),
+    type: z.string().min(1).optional(),
+  }),
+  [Method.COMBATANT_UPDATE]: z
+    .object({
+      combat: docRefSchema.optional(),
+      combatant: z.string().min(1),
+      defeated: z.boolean().optional(),
+      hidden: z.boolean().optional(),
+      initiative: z.number().optional(),
+    })
+    .refine(
+      (p) => p.defeated !== undefined || p.hidden !== undefined || p.initiative !== undefined,
+      { message: "Provide at least one of defeated/hidden/initiative" },
+    ),
+  [Method.COMBATANT_CONDITION]: z.object({
+    combat: docRefSchema.optional(),
+    combatant: z.string().min(1),
+    condition: z.string().min(1),
+    active: z.boolean().optional(),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 
