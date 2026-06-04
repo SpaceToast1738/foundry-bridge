@@ -28,6 +28,12 @@ includes a **`launcher`** block that says *why* the bridge is down even when the
 `login_failed` (with `launcher.availableUsers` — the users that DO exist) / `error`. Read it before
 retrying — it tells you the fix (launch a world, make the bridge user a GM, etc.).
 
+`get_status` also reports `serverVersion`, `moduleVersion` (Foundry's cached manifest — can lag) and
+**`moduleCodeVersion`** (the actually-running bundle): if these two differ, a redeploy hasn't fully taken
+effect. `relayStats` gives `connectedSince`/`totalCalls`/`errorCount`/`lastError`. For a call-by-call view,
+**`get_recent_activity`** returns the last ~50 calls (`{method, ok, ms, ts}`, most-recent-first) — also
+server-side, so it answers even when the module is down.
+
 ## Reading documents
 
 - List tools per collection: `get_actors`, `get_items`, `get_journals`, `get_folders`, `get_scenes`,
@@ -42,7 +48,9 @@ retrying — it tells you the fix (launch a world, make the bridge user a GM, et
 - `get_actor` / `get_item` / etc. fetch a single document. Provide `_id` (preferred) or `name`.
 - **`search_documents`** does case-insensitive **substring** search over names (and journal page text)
   across collections — use it to find something when you don't know its exact name; use `where` only for
-  exact field matches. Returns lightweight hits (`_id`, `name`, `uuid`, snippet).
+  exact field matches. Returns lightweight hits (`_id`, `name`, `uuid`, snippet). Narrow with `collections`,
+  `type` (e.g. only `"npc"`/`"spell"`), and `match_fields` (also match inside dotted string fields like
+  `["system.description.value"]`, returning a field snippet).
 - **Always inspect a document before modifying it.** System-specific data lives under `system.*` and
   schemas vary by game system.
 
@@ -139,6 +147,11 @@ because they respect damage types and traits:
 - `dnd5e_death_saves { actor, successes?, failures? }` — set the counters (to *roll* a death save use
   `dnd5e_roll kind:"death"`).
 - `dnd5e_concentration { actor, action }` — `check` or `break`.
+- `dnd5e_use_item { actor, item }` — use an owned item (weapon/spell/consumable/feature) by `_id`/`name`,
+  running its full use flow (consumes uses/slots) headlessly. Prefer this on newer dnd5e (rolls live in
+  item Activities).
+- `dnd5e_item_roll { actor, item, kind:"attack"|"damage" }` — roll just the attack or damage for an item;
+  returns the total. `UNAVAILABLE` on Activities-only versions → use `dnd5e_use_item`.
 
 On non-5e worlds, use the generic actor tools (`apply_damage`, `get_roll_data` + `roll_dice`, etc.).
 
@@ -195,6 +208,9 @@ the world until imported.
 - `search_compendium { pack, query? }` — find entries by name; returns `_id`, `name`, `type`, `uuid`, `img`.
 - `import_from_compendium { pack, entries: [{ _id|name }], folder? }` — copy entries into the world as
   real documents (optionally into a folder). Imported documents receive fresh `_id`s.
+- `export_to_compendium { pack, type, entries: [{ _id|name }] }` — the reverse: write world documents
+  INTO a pack (campaign backups / authoring). `type` is the document type; the pack must be **unlocked**
+  (else `FORBIDDEN`) and hold that type. Fresh `_id`s are assigned in the pack.
 
 Prefer importing system content over hand-building it. Import first, then inspect/modify the world copy.
 
@@ -263,6 +279,8 @@ Coordinates are scene pixels. Use `get_active_scene` for the scene's dimensions 
 - `place_light { x, y, dim?, bright?, color?, scene? }` and `place_note { x, y, journal, text?,
   icon_size?, scene? }` — typed convenience over `create_embedded` `"AmbientLight"`/`"Note"`. For tiles
   and other placeables, use `create_embedded` (see *Embedded documents → Map geometry*).
+- `place_template { t, x, y, distance, direction?, angle?, width?, scene? }` — a measured template / AoE
+  (`t`: circle/cone/ray/rect; `distance` in grid units). Good for spell areas.
 
 ## Dice & tables
 

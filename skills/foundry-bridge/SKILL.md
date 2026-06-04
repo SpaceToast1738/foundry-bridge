@@ -12,8 +12,10 @@ permission tiers; this skill is about *how to work well and safely*. World-speci
 
 ## Start every session
 1. `get_world` — confirm you're connected and on the intended world (title, system, version).
-   If anything errors, `get_status` reports relay connectivity, module version, and the tier states
-   (it never errors when disconnected — returns `{ relayConnected: false }`).
+   If anything errors, `get_status` reports relay connectivity, versions
+   (`moduleCodeVersion` = running code vs `moduleVersion` = Foundry's cached manifest), relay stats, and
+   tier states + a `launcher` block explaining *why* it's down — it never errors when disconnected.
+   `get_recent_activity` shows the last calls (handy for debugging).
 2. Read the world's guidance: `get_journals` with `where: {"name": "AGENTS"}` (also try
    `"AI Instructions"`). If found, **follow it** — it defines this world's folder taxonomy, naming
    conventions, and what's off-limits. The GM's instructions override these defaults.
@@ -52,7 +54,8 @@ The server's `INSTRUCTIONS.md` has the full document/page model.
 ## Reusing existing content
 Need a monster, spell, item, or premade content? Browse packs with `list_compendiums` /
 `search_compendium` and pull copies in with `import_from_compendium` (optionally into a folder) rather
-than hand-building from scratch. Then inspect/modify the world copy.
+than hand-building from scratch. Then inspect/modify the world copy. To save world content back into a
+pack (backups/authoring), use `export_to_compendium` (the pack must be unlocked).
 
 ## Filing / organising recipe
 1. `get_folders` (e.g. `requested_fields: ["name","type","folder"]`) to see the current taxonomy.
@@ -68,9 +71,10 @@ for status effects; `get_roll_data` to feed `roll_dice`; `assign_actor` to give 
 `apply_damage`/`apply_healing` for HP (system-dependent — falls back to `modify_document` if unsupported).
 On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed, respects resistances),
 `dnd5e_apply_healing` (+temp HP), `dnd5e_roll` (saves/checks/skills/death), `dnd5e_rest`,
-`dnd5e_actor_summary`, plus resource management: `dnd5e_spell_slots`, `dnd5e_currency`, `dnd5e_award_xp`,
-`dnd5e_hit_dice`, `dnd5e_death_saves`, `dnd5e_concentration`. They error on non-5e worlds, so check
-`get_world`'s system first.
+`dnd5e_actor_summary`, resource management (`dnd5e_spell_slots`, `dnd5e_currency`, `dnd5e_award_xp`,
+`dnd5e_hit_dice`, `dnd5e_death_saves`, `dnd5e_concentration`), and item play (`dnd5e_use_item` to use a
+weapon/spell/consumable; `dnd5e_item_roll` for a bare attack/damage). They error on non-5e worlds, so
+check `get_world`'s system first.
 
 ## Running the table
 - **Scenes/tokens:** `get_active_scene` for context; `activate_scene` to switch view; `place_token`
@@ -86,7 +90,8 @@ On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed
   `damage_combatant`/`combatant_condition`/`update_combatant` (defeated/hidden) to run the fight.
 - **Scene env / maps:** `create_scene` (placeable-ready — use it instead of `create_document` for scenes);
   `update_scene` (darkness/lighting/weather), `reset_fog`; `draw_walls` + `toggle_door`; `place_light`/
-  `place_note` (tiles etc. via `create_embedded`); timed effects via `create_embedded "ActiveEffect"`.
+  `place_note`/`place_template` (AoE; tiles etc. via `create_embedded`); timed effects via
+  `create_embedded "ActiveEffect"`.
   Placeables create reliably only on the **active** scene — `activate_scene` first; a `TIMEOUT` that says
   so means "activate the target scene," not "retry."
 - **Cards:** `shuffle_cards`/`deal_cards`/`draw_cards`/`pass_cards`/`reset_cards` for worlds with decks.

@@ -1,6 +1,6 @@
 # foundry-bridge
 
-Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — paginated/sorted reads and search across collections, generic document CRUD, embedded documents (journal pages, actor items, map walls/lights/notes, timed active effects), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, scene creation + map geometry (walls/doors/lights/notes), dice & roll tables, combat encounters (incl. per-combatant damage/conditions/defeated), asset upload, actor operations (conditions, ownership, HP), audio/playlist building, chat-log reading, document duplication, player presentation (show/pull/ping), scene environment, cards & decks, game-time control, and macro execution, plus an optional D&D-5e adapter (typed damage, rolls, rests, spell slots, currency, XP, hit dice, death saves, concentration) — all gated by read/write/destructive permission tiers. A `get_status` health probe (with launcher diagnostics), bounded waits on headless-prone calls, and a one-command redeploy keep it diagnosable in production.
+Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — paginated/sorted reads and search across collections, generic document CRUD, embedded documents (journal pages, actor items, map walls/lights/notes, timed active effects), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, scene creation + map geometry (walls/doors/lights/notes), dice & roll tables, combat encounters (incl. per-combatant damage/conditions/defeated), asset upload, actor operations (conditions, ownership, HP), audio/playlist building, chat-log reading, document duplication, player presentation (show/pull/ping), scene environment, cards & decks, game-time control, measured templates (AoE), compendium import **and export**, and macro execution, plus an optional D&D-5e adapter (typed damage, rolls, rests, spell slots, currency, XP, hit dice, death saves, concentration, and item use / attack rolls) — all gated by read/write/destructive permission tiers. A `get_status` health probe (running-code version, relay stats, launcher diagnostics) + `get_recent_activity` log, bounded waits on headless-prone calls, and a one-command redeploy keep it diagnosable in production.
 
 See [HANDOFF.md on foundry-mcp:fix/audit-and-sdk-1x](https://github.com/SpaceToast1738/foundry-mcp/blob/fix/audit-and-sdk-1x/HANDOFF.md) for background on why we pivoted away from the raw-WebSocket approach.
 
@@ -35,7 +35,8 @@ is exceeded; `UNAVAILABLE` if no Foundry client is connected to the relay.
 | Tool | Description |
 |------|-------------|
 | `get_world` | Compact world descriptor: title, system, version, and per-collection counts. |
-| `get_status` | Health/diagnostics: relay connectivity, module version, world descriptor, tier states, **and a `launcher` block** (current world / GM status / login errors) that explains *why* the bridge is down even when the module isn't connected. Returns `{ relayConnected: false, launcher }` instead of erroring. |
+| `get_status` | Health/diagnostics: relay connectivity, `serverVersion`/`moduleVersion`/**`moduleCodeVersion`** (running bundle vs Foundry's cached manifest), world descriptor, tier states, `relayStats` (connectedSince/totalCalls/errorCount/lastError), **and a `launcher` block** explaining *why* the bridge is down even when the module isn't connected. Returns `{ relayConnected: false, … }` instead of erroring. |
+| `get_recent_activity` | The last ~50 bridge calls (`{method, ok, ms, ts}`, most-recent-first). Server-side — answers even when the module is disconnected. |
 | `ping` | Health check; returns `{ pong: true, timestamp }`. |
 
 ### Reading · `read`
@@ -62,7 +63,7 @@ it). Single-gets take `_id` (preferred) or `name`. Every result carries the docu
 ### Search · `read`
 | Tool | Description |
 |------|-------------|
-| `search_documents` | Case-insensitive **substring** search over names (and journal page text) across collections. Returns lightweight hits (`_id`, `name`, `uuid`, snippet). Use when you don't know the exact name; use `where` for exact-field matches. |
+| `search_documents` | Case-insensitive **substring** search over names (and journal page text) across collections; narrow with `collections`, `type`, and `match_fields` (dotted string fields). Returns lightweight hits (`_id`, `name`, `uuid`, snippet). Use when you don't know the exact name; use `where` for exact-field matches. |
 
 ### Documents
 | Tool | Tier | Description |
@@ -110,6 +111,7 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `list_compendiums` | read | List available packs (id, label, document type, system); optional type filter. |
 | `search_compendium` | read | Search a pack's index by name; returns `_id`, `name`, `type`, `uuid`, `img`. |
 | `import_from_compendium` | write | Import pack entries into the world as real documents (optional destination folder; fresh `_id`s). |
+| `export_to_compendium` | write | Write world documents back INTO a pack (backups/authoring). Pack must be unlocked and hold that `type`; fresh `_id`s. |
 
 ### Chat
 | Tool | Tier | Description |
@@ -138,6 +140,7 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 | `create_scene` | write | Create a **placeable-ready** scene (sane grid/dimensions) so walls/tokens/lights work immediately; optional `background`/`activate`. Prefer over `create_document` for scenes. |
 | `toggle_door` | write | Open/close/lock a door wall (`state` 0/1/2; omit to flip). |
 | `place_light` / `place_note` | write | Typed convenience over `create_embedded` `AmbientLight`/`Note`. (Tiles etc. via `create_embedded`.) |
+| `place_template` | write | Place a measured template / AoE (`t`: circle/cone/ray/rect) for spell areas. |
 
 ### Dice & tables
 | Tool | Tier | Description |
@@ -186,6 +189,8 @@ these over generic `apply_damage` as they respect damage types and traits.
 | `dnd5e_hit_dice` | write | Spend/recover pooled hit dice. |
 | `dnd5e_death_saves` | write | Set death-save success/failure counters. |
 | `dnd5e_concentration` | write | Check or break concentration. |
+| `dnd5e_use_item` | write | Use an owned item (weapon/spell/consumable/feature) — full use flow, headless. |
+| `dnd5e_item_roll` | write | Roll just an item `attack` or `damage`; returns the total. |
 
 ### Present to players · `write`
 | Tool | Description |
