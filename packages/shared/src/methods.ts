@@ -72,6 +72,12 @@ export const Method = {
   DOOR_TOGGLE: "scene.toggle_door",
   LIGHT_PLACE: "scene.place_light",
   NOTE_PLACE: "scene.place_note",
+  DND5E_SPELL_SLOTS: "dnd5e.spell_slots",
+  DND5E_CURRENCY: "dnd5e.currency",
+  DND5E_AWARD_XP: "dnd5e.award_xp",
+  DND5E_HIT_DICE: "dnd5e.hit_dice",
+  DND5E_DEATH_SAVES: "dnd5e.death_saves",
+  DND5E_CONCENTRATION: "dnd5e.concentration",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -148,6 +154,12 @@ export const methodSchema = z.enum([
   Method.DOOR_TOGGLE,
   Method.LIGHT_PLACE,
   Method.NOTE_PLACE,
+  Method.DND5E_SPELL_SLOTS,
+  Method.DND5E_CURRENCY,
+  Method.DND5E_AWARD_XP,
+  Method.DND5E_HIT_DICE,
+  Method.DND5E_DEATH_SAVES,
+  Method.DND5E_CONCENTRATION,
 ]);
 
 export const PermissionTier = {
@@ -227,6 +239,12 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.DOOR_TOGGLE]: PermissionTier.WRITE,
   [Method.LIGHT_PLACE]: PermissionTier.WRITE,
   [Method.NOTE_PLACE]: PermissionTier.WRITE,
+  [Method.DND5E_SPELL_SLOTS]: PermissionTier.WRITE,
+  [Method.DND5E_CURRENCY]: PermissionTier.WRITE,
+  [Method.DND5E_AWARD_XP]: PermissionTier.WRITE,
+  [Method.DND5E_HIT_DICE]: PermissionTier.WRITE,
+  [Method.DND5E_DEATH_SAVES]: PermissionTier.WRITE,
+  [Method.DND5E_CONCENTRATION]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.MACRO_EXECUTE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
@@ -574,6 +592,47 @@ export const paramSchemas = {
     journal: docRefSchema,
     text: z.string().min(1).optional(),
     icon_size: z.number().int().positive().optional(),
+  }),
+  [Method.DND5E_SPELL_SLOTS]: z.object({
+    actor: docRefSchema,
+    level: z.union([z.number().int().min(1).max(9), z.literal("pact")]),
+    action: z.enum(["use", "recover", "set"]),
+    amount: z.number().int().nonnegative().optional(),
+  }),
+  [Method.DND5E_CURRENCY]: z.object({
+    actor: docRefSchema,
+    mode: z.enum(["add", "set"]),
+    changes: z
+      .object({
+        pp: z.number().int().optional(),
+        gp: z.number().int().optional(),
+        ep: z.number().int().optional(),
+        sp: z.number().int().optional(),
+        cp: z.number().int().optional(),
+      })
+      .refine((c) => Object.keys(c).length > 0, { message: "Provide at least one coin type" }),
+  }),
+  [Method.DND5E_AWARD_XP]: z.object({
+    actor: docRefSchema,
+    amount: z.number().int(),
+  }),
+  [Method.DND5E_HIT_DICE]: z.object({
+    actor: docRefSchema,
+    action: z.enum(["spend", "recover"]),
+    amount: z.number().int().positive().optional(),
+  }),
+  [Method.DND5E_DEATH_SAVES]: z
+    .object({
+      actor: docRefSchema,
+      successes: z.number().int().min(0).max(3).optional(),
+      failures: z.number().int().min(0).max(3).optional(),
+    })
+    .refine((p) => p.successes !== undefined || p.failures !== undefined, {
+      message: "Provide successes and/or failures",
+    }),
+  [Method.DND5E_CONCENTRATION]: z.object({
+    actor: docRefSchema,
+    action: z.enum(["check", "break"]),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

@@ -889,6 +889,96 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "dnd5e_spell_slots",
+    description:
+      "[D&D 5e] Adjust an actor's spell slots. `level` 1–9 or \"pact\"; `action` use/recover/set; `amount` (default 1). Clamped to max. Returns the level's value/max.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        level: { description: "Spell level 1–9, or \"pact\".", anyOf: [{ type: "integer", minimum: 1, maximum: 9 }, { type: "string", enum: ["pact"] }] },
+        action: { type: "string", enum: ["use", "recover", "set"] },
+        amount: { type: "integer", description: "Slots to use/recover, or the value to set (default 1)." },
+      },
+      required: ["actor", "level", "action"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_currency",
+    description:
+      "[D&D 5e] Adjust an actor's coins. `mode` add (delta, may be negative) or set (absolute); `changes` is any of pp/gp/ep/sp/cp. Returns the new currency.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        mode: { type: "string", enum: ["add", "set"] },
+        changes: {
+          type: "object",
+          properties: {
+            pp: { type: "integer" }, gp: { type: "integer" }, ep: { type: "integer" },
+            sp: { type: "integer" }, cp: { type: "integer" },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ["actor", "mode", "changes"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_award_xp",
+    description:
+      "[D&D 5e] Add (or remove, if negative) XP for an actor. Returns new xp, the next-level threshold, and whether a level-up is available (does not auto-level).",
+    inputSchema: {
+      type: "object",
+      properties: { actor: docRefSchema, amount: { type: "integer" } },
+      required: ["actor", "amount"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_hit_dice",
+    description:
+      "[D&D 5e] Spend/recover an actor's hit dice (pooled system.attributes.hd). `amount` default 1. UNAVAILABLE if the version tracks HD per class item — use modify_document then.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        action: { type: "string", enum: ["spend", "recover"] },
+        amount: { type: "integer", minimum: 1 },
+      },
+      required: ["actor", "action"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_death_saves",
+    description:
+      "[D&D 5e] Set an actor's death-save counters (`successes` and/or `failures`, 0–3). For rolling a death save use dnd5e_roll kind=death.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        actor: docRefSchema,
+        successes: { type: "integer", minimum: 0, maximum: 3 },
+        failures: { type: "integer", minimum: 0, maximum: 3 },
+      },
+      required: ["actor"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_concentration",
+    description:
+      "[D&D 5e] `check` whether an actor is concentrating, or `break` their concentration (ends the concentration effect).",
+    inputSchema: {
+      type: "object",
+      properties: { actor: docRefSchema, action: { type: "string", enum: ["check", "break"] } },
+      required: ["actor", "action"],
+    },
+  });
+
+  tools.push({
     name: "show_to_players",
     description:
       "Show content to all players: an `image` (path → popout on everyone's screen) or a `journal` (by `_id`/`name`). Optional `title`.",
@@ -1250,6 +1340,18 @@ export async function dispatchTool(
       return ctx.relay.call(Method.DND5E_REST, params);
     case "dnd5e_actor_summary":
       return ctx.relay.call(Method.DND5E_ACTOR_SUMMARY, params);
+    case "dnd5e_spell_slots":
+      return ctx.relay.call(Method.DND5E_SPELL_SLOTS, params);
+    case "dnd5e_currency":
+      return ctx.relay.call(Method.DND5E_CURRENCY, params);
+    case "dnd5e_award_xp":
+      return ctx.relay.call(Method.DND5E_AWARD_XP, params);
+    case "dnd5e_hit_dice":
+      return ctx.relay.call(Method.DND5E_HIT_DICE, params);
+    case "dnd5e_death_saves":
+      return ctx.relay.call(Method.DND5E_DEATH_SAVES, params);
+    case "dnd5e_concentration":
+      return ctx.relay.call(Method.DND5E_CONCENTRATION, params);
     case "create_table":
       return ctx.relay.call(Method.TABLE_CREATE, params);
     case "add_table_results":

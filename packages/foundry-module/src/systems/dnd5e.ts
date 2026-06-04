@@ -34,6 +34,24 @@ interface Dnd5eActor {
   rollAbilityTest?: (...args: unknown[]) => Promise<unknown>;
   rollSkill?: (...args: unknown[]) => Promise<unknown>;
   rollDeathSave?: (...args: unknown[]) => Promise<unknown>;
+  concentration?: { effects?: { size?: number; contents?: unknown[] } };
+  endConcentration?: (...args: unknown[]) => Promise<unknown>;
+}
+
+/** Read a (possibly dotted) path off the actor's `system` object. */
+function sysPath(actor: Dnd5eActor, path: string): unknown {
+  let cur: unknown = actor.system;
+  for (const seg of path.split(".")) {
+    if (cur === null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return cur;
+}
+
+function clamp(n: number, min: number, max: number | undefined): number {
+  let v = Math.max(min, n);
+  if (typeof max === "number") v = Math.min(max, v);
+  return v;
 }
 
 function resolveActor(ref: DocRef): Dnd5eActor {
@@ -196,4 +214,127 @@ export function handleDnd5eActorSummary(
     level: sys.details?.level,
     cr: sys.details?.cr,
   };
+}
+
+export async function handleDnd5eSpellSlots(
+  params: ParamsFor<typeof Method.DND5E_SPELL_SLOTS>,
+): Promise<Record<string, unknown>> {
+  assertDnd5e();
+  const actor = resolveActor(params.actor);
+  const key = params.level === "pact" ? "pact" : `spell${params.level}`;
+  const base = `system.spells.${key}`;
+  const value = Number(sysPath(actor, `spells.${key}.value`) ?? 0);
+  const max = Number(sysPath(actor, `spells.${key}.max`) ?? 0);
+  const amount = params.amount ?? 1;
+  let next: number;
+  switch (params.action) {
+    case "use":
+      next = clamp(value - amount, 0, max || undefined);
+      break;
+    case "recover":
+      next = clamp(value + amount, 0, max || undefined);
+      break;
+    case "set":
+      next = clamp(amount, 0, max || undefined);
+      break;
+  }
+  await actor.update({ [`${base}.value`]: next });
+  return { actor: actor.id, level: params.level, value: next, max };
+}
+
+export async function handleDnd5eCurrency(
+  params: ParamsFor<typeof Method.DND5E_CURRENCY>,
+): Promise<Record<string, unknown>> {
+  assertDnd5e();
+  const actor = resolveActor(params.actor);
+  const update: Record<string, unknown> = {};
+  const result: Record<string, number> = {};
+  for (const [coin, delta] of Object.entries(params.changes)) {
+    if (typeof delta !== "number") continue;
+    const current = Number(sysPath(actor, `currency.${coin}`) ?? 0);
+    const next = params.mode === "set" ? delta : current + delta;
+    update[`system.currency.${coin}`] = Math.max(0, next);
+    result[coin] = Math.max(0, next);
+  }
+  await actor.update(update);
+  return { actor: actor.id, currency: result };
+}
+
+export async function handleDnd5eAwardXp(
+  params: ParamsFor<typeof Method.DND5E_AWARD_XP>,
+): Promise<Record<string, unknown>> {
+  assertDnd5e();
+  const actor = resolveActor(params.actor);
+  const current = Number(sysPath(actor, "details.xp.value") ?? 0);
+  const threshold = sysPath(actor, "details.xp.max");
+  const next = Math.max(0, current + params.amount);
+  await actor.update({ "system.details.xp.value": next });
+  return {
+    actor: actor.id,
+    xp: next,
+    threshold: typeof threshold === "number" ? threshold : null,
+    levelUpAvailable: typeof threshold === "number" ? next >= threshold : null,
+  };
+}
+
+export async function handleDnd5eHitDice(
+  params: ParamsFor<typeof Method.DND5E_HIT_DICE>,
+): Promise<Record<string, unknown>> {
+  assertDnd5e();
+  const actor = resolveActor(params.actor);
+  const value = sysPath(actor, "attributes.hd.value");
+  const max = sysPath(actor, "attributes.hd.max");
+  if (typeof value !== "number") {
+    throw new BridgeError(
+      ErrorCode.UNAVAILABLE,
+      "This actor/dnd5e version doesn't expose system.attributes.hd.value; manage hit dice on the class item via modify_document",
+    );
+  }
+  const amount = params.amount ?? 1;
+  const next = clamp(
+    params.action === "spend" ? value - amount : value + amount,
+    0,
+    typeof max === "number" ? max : undefined,
+  );
+  await actor.update({ "system.attributes.hd.value": next });
+  return { actor: actor.id, hitDice: next, max: typeof max === "number" ? max : null };
+}
+
+export async function handleDnd5eDeathSaves(
+  params: ParamsFor<typeof Method.DND5E_DEATH_SAVES>,
+): Promise<Record<string, unknown>> {
+  assertDnd5e();
+  const actor = resolveActor(params.actor);
+  const update: Record<string, unknown> = {};
+  if (params.successes !== undefined) update["system.attributes.death.success"] = params.successes;
+  if (params.failures !== undefined) update["system.attributes.death.failure"] = params.failures;
+  await actor.update(update);
+  return {
+    actor: actor.id,
+    death: {
+      success: params.successes ?? sysPath(actor, "attributes.death.success"),
+      failure: params.failures ?? sysPath(actor, "attributes.death.failure"),
+    },
+  };
+}
+
+export async function handleDnd5eConcentration(
+  params: ParamsFor<typeof Method.DND5E_CONCENTRATION>,
+): Promise<Record<string, unknown>> {
+  assertDnd5e();
+  const actor = resolveActor(params.actor);
+  const effects = actor.concentration?.effects;
+  const count = effects?.size ?? effects?.contents?.length ?? 0;
+  if (params.action === "check") {
+    return { actor: actor.id, concentrating: count > 0, count };
+  }
+  // break
+  if (typeof actor.endConcentration !== "function") {
+    throw new BridgeError(
+      ErrorCode.UNAVAILABLE,
+      "This dnd5e version doesn't expose actor.endConcentration(); remove the concentration ActiveEffect with delete_embedded",
+    );
+  }
+  await actor.endConcentration();
+  return { actor: actor.id, concentrating: false, broke: count };
 }

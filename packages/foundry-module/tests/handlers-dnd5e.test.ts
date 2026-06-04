@@ -2,8 +2,14 @@ import {
   handleDnd5eActorSummary,
   handleDnd5eApplyDamage,
   handleDnd5eApplyHealing,
+  handleDnd5eAwardXp,
+  handleDnd5eConcentration,
+  handleDnd5eCurrency,
+  handleDnd5eDeathSaves,
+  handleDnd5eHitDice,
   handleDnd5eRest,
   handleDnd5eRoll,
+  handleDnd5eSpellSlots,
 } from "../src/systems/dnd5e";
 import { installFakeGame, type FakeDoc } from "./helpers/fake-game";
 
@@ -93,5 +99,80 @@ describe("dnd5e adapter", () => {
     restore();
     restore = installFakeGame({ actors: [make5eActor(calls)], system: { id: "pf2e", version: "1" } });
     expect(() => handleDnd5eActorSummary({ actor: { _id: "a1" } })).toThrow();
+  });
+});
+
+describe("dnd5e depth (round 7)", () => {
+  let restore: () => void;
+  let updates: Record<string, unknown>[];
+
+  function richActor(): FakeDoc {
+    return {
+      _id: "pc",
+      id: "pc",
+      name: "Mage",
+      system: {
+        spells: { spell1: { value: 4, max: 4 }, spell3: { value: 2, max: 3 }, pact: { value: 1, max: 2 } },
+        currency: { gp: 10, sp: 5, cp: 0 },
+        details: { xp: { value: 900, max: 2700 } },
+        attributes: { hd: { value: 3, max: 5 }, death: { success: 0, failure: 0 } },
+      },
+      concentration: { effects: { size: 1 } },
+      endConcentration: async () => undefined,
+      update: async (d: Record<string, unknown>) => {
+        updates.push(d);
+        return d;
+      },
+    } as unknown as FakeDoc;
+  }
+
+  beforeEach(() => {
+    updates = [];
+    restore = installFakeGame({ actors: [richActor()], system: { id: "dnd5e", version: "5.3.3" } });
+  });
+  afterEach(() => restore());
+
+  it("uses a spell slot (clamped) ", async () => {
+    const r = await handleDnd5eSpellSlots({ actor: { _id: "pc" }, level: 3, action: "use", amount: 1 });
+    expect(r).toMatchObject({ level: 3, value: 1, max: 3 });
+    expect(updates[0]).toEqual({ "system.spells.spell3.value": 1 });
+  });
+
+  it("recovers a pact slot up to max", async () => {
+    const r = await handleDnd5eSpellSlots({ actor: { _id: "pc" }, level: "pact", action: "recover", amount: 5 });
+    expect(r).toMatchObject({ level: "pact", value: 2, max: 2 });
+  });
+
+  it("adds and sets currency", async () => {
+    const add = await handleDnd5eCurrency({ actor: { _id: "pc" }, mode: "add", changes: { gp: 5, sp: -2 } });
+    expect(add).toMatchObject({ currency: { gp: 15, sp: 3 } });
+    const set = await handleDnd5eCurrency({ actor: { _id: "pc" }, mode: "set", changes: { gp: 100 } });
+    expect(set).toMatchObject({ currency: { gp: 100 } });
+  });
+
+  it("awards xp and flags a level-up threshold", async () => {
+    const r = await handleDnd5eAwardXp({ actor: { _id: "pc" }, amount: 2000 });
+    expect(r).toMatchObject({ xp: 2900, threshold: 2700, levelUpAvailable: true });
+  });
+
+  it("spends hit dice", async () => {
+    const r = await handleDnd5eHitDice({ actor: { _id: "pc" }, action: "spend", amount: 2 });
+    expect(r).toMatchObject({ hitDice: 1, max: 5 });
+  });
+
+  it("sets death-save counters", async () => {
+    const r = await handleDnd5eDeathSaves({ actor: { _id: "pc" }, successes: 2, failures: 1 });
+    expect(r).toMatchObject({ death: { success: 2, failure: 1 } });
+    expect(updates[0]).toMatchObject({
+      "system.attributes.death.success": 2,
+      "system.attributes.death.failure": 1,
+    });
+  });
+
+  it("checks and breaks concentration", async () => {
+    const chk = await handleDnd5eConcentration({ actor: { _id: "pc" }, action: "check" });
+    expect(chk).toMatchObject({ concentrating: true, count: 1 });
+    const brk = await handleDnd5eConcentration({ actor: { _id: "pc" }, action: "break" });
+    expect(brk).toMatchObject({ concentrating: false, broke: 1 });
   });
 });

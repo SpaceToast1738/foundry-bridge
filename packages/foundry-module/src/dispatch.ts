@@ -95,8 +95,14 @@ import {
   handleDnd5eActorSummary,
   handleDnd5eApplyDamage,
   handleDnd5eApplyHealing,
+  handleDnd5eAwardXp,
+  handleDnd5eConcentration,
+  handleDnd5eCurrency,
+  handleDnd5eDeathSaves,
+  handleDnd5eHitDice,
   handleDnd5eRest,
   handleDnd5eRoll,
+  handleDnd5eSpellSlots,
 } from "./systems/dnd5e.js";
 
 export type Handler = (
@@ -256,6 +262,18 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleLightPlace(params as Parameters<typeof handleLightPlace>[0]),
   [Method.NOTE_PLACE]: (params) =>
     handleNotePlace(params as Parameters<typeof handleNotePlace>[0]),
+  [Method.DND5E_SPELL_SLOTS]: (params) =>
+    handleDnd5eSpellSlots(params as Parameters<typeof handleDnd5eSpellSlots>[0]),
+  [Method.DND5E_CURRENCY]: (params) =>
+    handleDnd5eCurrency(params as Parameters<typeof handleDnd5eCurrency>[0]),
+  [Method.DND5E_AWARD_XP]: (params) =>
+    handleDnd5eAwardXp(params as Parameters<typeof handleDnd5eAwardXp>[0]),
+  [Method.DND5E_HIT_DICE]: (params) =>
+    handleDnd5eHitDice(params as Parameters<typeof handleDnd5eHitDice>[0]),
+  [Method.DND5E_DEATH_SAVES]: (params) =>
+    handleDnd5eDeathSaves(params as Parameters<typeof handleDnd5eDeathSaves>[0]),
+  [Method.DND5E_CONCENTRATION]: (params) =>
+    handleDnd5eConcentration(params as Parameters<typeof handleDnd5eConcentration>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {
