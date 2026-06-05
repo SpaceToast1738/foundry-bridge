@@ -22,7 +22,9 @@ permission tiers; this skill is about *how to work well and safely*. World-speci
 
 **Finding things:** `where` only matches exact field values. To locate a document by a word in its name
 or journal text, use `search_documents` (substring, case-insensitive). Read results include each doc's
-`uuid` — cross-link documents with `@UUID[<uuid>]{label}` in HTML content. For big collections, page
+`uuid` — cross-link documents with `@UUID[<uuid>]{label}` in HTML content. After renaming a document,
+`find_references` + `refresh_labels` fix `@UUID` links whose visible label went stale. Before risky/bulk
+edits, consider `backup_world` (host snapshot) alongside `dry_run`. For big collections, page
 with `sort` + `offset`/`limit`; if a list comes back `truncated: true`, it's incomplete — narrow or page
 rather than trusting it.
 

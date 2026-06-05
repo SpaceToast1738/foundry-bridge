@@ -18,6 +18,7 @@ import {
   handleDocumentsUpdate,
 } from "./handlers/documents.js";
 import { handleDocumentsSearch } from "./handlers/search.js";
+import { handleFindReferences, handleRefreshLabels } from "./handlers/references.js";
 import { handleTableCreate, handleTableAddResults } from "./handlers/tables.js";
 import {
   handlePlaylistAddSounds,
@@ -130,6 +131,10 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleDocumentsGet(params as Parameters<typeof handleDocumentsGet>[0]),
   [Method.DOCUMENTS_SEARCH]: (params) =>
     handleDocumentsSearch(params as Parameters<typeof handleDocumentsSearch>[0]),
+  [Method.DOCUMENTS_FIND_REFS]: (params) =>
+    handleFindReferences(params as Parameters<typeof handleFindReferences>[0]),
+  [Method.DOCUMENTS_REFRESH_LABELS]: (params) =>
+    handleRefreshLabels(params as Parameters<typeof handleRefreshLabels>[0]),
   [Method.DOCUMENTS_CREATE]: (params) =>
     handleDocumentsCreate(params as Parameters<typeof handleDocumentsCreate>[0]),
   [Method.DOCUMENTS_UPDATE]: (params) =>

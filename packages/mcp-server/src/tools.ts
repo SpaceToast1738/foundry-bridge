@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   BridgeError,
   ErrorCode,
@@ -23,6 +25,34 @@ export function readLauncherStatus(): Record<string, unknown> {
     return JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
   } catch {
     return { state: "unknown" };
+  }
+}
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Run the operator-configured backup script (FOUNDRY_BACKUP_SCRIPT) with a
+ * sanitized label only — never a shell string, so the agent can't inject a
+ * command. The script is expected to print a JSON object (e.g. {path,bytes}).
+ * UNAVAILABLE if no script is configured.
+ */
+export async function runBackup(label: unknown): Promise<unknown> {
+  const script = process.env.FOUNDRY_BACKUP_SCRIPT;
+  if (!script) {
+    throw new BridgeError(
+      ErrorCode.UNAVAILABLE,
+      "Backup is not configured. Set FOUNDRY_BACKUP_SCRIPT on the gateway to a script that snapshots the world and prints JSON (e.g. {\"path\":…,\"bytes\":…}).",
+    );
+  }
+  const safeLabel = String(label ?? "").replace(/[^a-z0-9-_]/gi, "").slice(0, 40);
+  const { stdout } = await execFileAsync(script, safeLabel ? [safeLabel] : [], {
+    timeout: 300_000,
+    maxBuffer: 1 << 20,
+  });
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return { ok: true, output: stdout.trim().slice(0, 500) };
   }
 }
 
@@ -206,6 +236,35 @@ export function buildToolDefinitions(): ToolDef[] {
     description:
       "Preview only — return what WOULD change (a diff / would_delete / would_create) without persisting. Shows direct field writes, not downstream derived/Active-Effect recompute.",
   } as const;
+
+  tools.push({
+    name: "find_references",
+    description:
+      "Find @UUID content links that point at a target document (by uuid or bare _id), across journal page text and actor/item descriptions. Each hit reports where it is, the label, and whether the label is STALE (differs from the target's current name). Use after renaming a document to find links whose visible label went stale.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        target: { type: "string", description: "Target uuid (e.g. \"JournalEntry.abc123\") or bare _id." },
+        collections: { type: "array", items: { type: "string" }, description: "Restrict the scan (default: all)." },
+        limit: { type: "integer", description: "Max references to return (default 100)." },
+      },
+      required: ["target"],
+    },
+  });
+
+  tools.push({
+    name: "refresh_labels",
+    description:
+      "Rewrite stale @UUID link labels for a renamed target to its current name, in place (journal pages + actor/item descriptions). Pair with find_references. Pass dry_run:true to preview which links would change.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        target: { type: "string", description: "Target uuid or bare _id whose name changed." },
+        dry_run: { type: "boolean", description: "Preview the would-be label rewrites without writing." },
+      },
+      required: ["target"],
+    },
+  });
 
   tools.push({
     name: "create_document",
@@ -1276,6 +1335,17 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "backup_world",
+    description:
+      "Take a server-side snapshot of the world before risky work, via the operator's configured backup script. Optional `label` (alphanumerics/-/_ only) tags the file. Returns the script's output (e.g. {path,bytes}). UNAVAILABLE unless the gateway has FOUNDRY_BACKUP_SCRIPT set. Note: a live snapshot is good-enough pre-op insurance, not a transactionally-perfect backup.",
+    inputSchema: {
+      type: "object",
+      properties: { label: { type: "string", description: "Optional label for the snapshot file." } },
+      required: [],
+    },
+  });
+
+  tools.push({
     name: "deal_cards",
     description:
       "Deal cards from a deck to one or more hands/piles. `deck` and each `to` entry are card-stack refs (_id/name); `number` per hand (default 1).",
@@ -1504,6 +1574,10 @@ export async function dispatchTool(
       return ctx.relay.call(Method.PING, {});
     case "search_documents":
       return ctx.relay.call(Method.DOCUMENTS_SEARCH, params);
+    case "find_references":
+      return ctx.relay.call(Method.DOCUMENTS_FIND_REFS, params);
+    case "refresh_labels":
+      return ctx.relay.call(Method.DOCUMENTS_REFRESH_LABELS, params);
     case "create_document":
       return ctx.relay.call(Method.DOCUMENTS_CREATE, params);
     case "modify_document":
@@ -1635,6 +1709,9 @@ export async function dispatchTool(
     case "get_recent_activity":
       // Server-side: reads the relay ring buffer; works even if the module is down.
       return { activity: ctx.relay.getRecentActivity() };
+    case "backup_world":
+      // Server-side host operation (the module can't tar the VPS).
+      return runBackup((params as Record<string, unknown>).label);
     case "deal_cards":
       return ctx.relay.call(Method.CARDS_DEAL, params);
     case "draw_cards":

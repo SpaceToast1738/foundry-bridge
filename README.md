@@ -37,6 +37,7 @@ is exceeded; `UNAVAILABLE` if no Foundry client is connected to the relay.
 | `get_world` | Compact world descriptor: title, system, version, and per-collection counts. |
 | `get_status` | Health/diagnostics: relay connectivity, `serverVersion`/`moduleVersion`/**`moduleCodeVersion`** (running bundle vs Foundry's cached manifest), world descriptor, tier states, `relayStats` (connectedSince/totalCalls/errorCount/lastError), **and a `launcher` block** explaining *why* the bridge is down even when the module isn't connected. Returns `{ relayConnected: false, … }` instead of erroring. |
 | `get_recent_activity` | The last ~50 bridge calls (`{method, ok, ms, ts}`, most-recent-first). Server-side — answers even when the module is disconnected. |
+| `backup_world` | Take a server-side world snapshot (via the operator's `FOUNDRY_BACKUP_SCRIPT`) before risky work. `UNAVAILABLE` if unconfigured. Good-enough pre-op snapshot, not a transactional backup. |
 | `ping` | Health check; returns `{ pong: true, timestamp }`. |
 
 ### Reading · `read`
@@ -64,6 +65,8 @@ it). Single-gets take `_id` (preferred) or `name`. Every result carries the docu
 | Tool | Description |
 |------|-------------|
 | `search_documents` | Case-insensitive **substring** search over names (and journal page text) across collections; narrow with `collections`, `type`, and `match_fields` (dotted string fields). Returns lightweight hits (`_id`, `name`, `uuid`, snippet). Use when you don't know the exact name; use `where` for exact-field matches. |
+| `find_references` | Find `@UUID` content links pointing at a target (uuid/`_id`) across journal pages + actor/item descriptions; flags `stale` labels (differ from the target's current name). |
+| `refresh_labels` | Rewrite stale `@UUID` link labels for a renamed target to its current name (journal pages + descriptions). Supports `dry_run`. write tier. |
 
 ### Documents
 | Tool | Tier | Description |

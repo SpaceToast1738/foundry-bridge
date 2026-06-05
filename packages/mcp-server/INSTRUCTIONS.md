@@ -61,6 +61,12 @@ text, embed a Foundry content link: `@UUID[<uuid>]{Optional label}` — e.g.
 `@UUID[JournalEntry.abc123]{The Hollow Vale}`. Foundry renders it as a clickable link. Resolve the
 target's `uuid` first (via `get_*` or `search_documents`), then write the link into the HTML content.
 
+These links are id-based, so renaming a target doesn't break the link — but the visible **label** goes
+stale. After renaming a document, use **`find_references { target }`** (uuid or bare `_id`) to list links
+pointing at it (across journal pages and actor/item descriptions), each flagged `stale` if its label no
+longer matches the current name; then **`refresh_labels { target, dry_run? }`** rewrites the stale labels
+to the current name in one call.
+
 ## Writing documents
 
 - `create_document` takes `type` (Actor / Item / JournalEntry / Folder / Scene / User) and `data: [{...}]`. Provide at minimum a `name`.
@@ -366,6 +372,12 @@ For worlds that use card stacks (a deck, plus player hands/piles — all `Cards`
   canvas/scene ops (placeables, scene/combat activate, present, audio, macro) return a bounded timeout
   with the actual fix (e.g. "activate the target scene first") — act on it rather than blindly retrying.
 - `INTERNAL` — something else broke. Report it.
+
+## Backups
+
+- `backup_world { label? }` — take a server-side snapshot before risky/bulk work (pairs well with
+  `dry_run`). Returns the backup file info, or `UNAVAILABLE` if the host has no backup script configured.
+  It's a good-enough pre-op snapshot, not a transactionally-perfect backup.
 
 ## Operating discipline
 

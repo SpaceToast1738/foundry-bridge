@@ -242,6 +242,15 @@ describe("get_status", () => {
     expect(out.activity).toEqual([{ method: "ping", ok: true, ms: 5, ts: 2 }]);
   });
 
+  it("backup_world is UNAVAILABLE unless FOUNDRY_BACKUP_SCRIPT is configured", async () => {
+    const prev = process.env.FOUNDRY_BACKUP_SCRIPT;
+    delete process.env.FOUNDRY_BACKUP_SCRIPT;
+    await expect(dispatchTool("backup_world", {}, ctxWithConn(true))).rejects.toMatchObject({
+      code: "UNAVAILABLE",
+    });
+    if (prev !== undefined) process.env.FOUNDRY_BACKUP_SCRIPT = prev;
+  });
+
   it("returns state:unknown when no status file exists", async () => {
     try { rmSync(statusPath); } catch { /* ignore */ }
     const out = (await dispatchTool("get_status", {}, ctxWithConn(false))) as Record<string, unknown>;

@@ -14,6 +14,6 @@ credentials.json
 /fulltest.mjs
 /verify-*.mjs
 /probe*.mjs
-/poll-status.mjs
+/poll*.mjs
 /status-once.mjs
 /triage.mjs
