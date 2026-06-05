@@ -250,6 +250,26 @@ Prefer importing system content over hand-building it. Import first, then inspec
   relevant field — a scene background, token texture, journal page `src`, or a `PlaylistSound` path). No
   separate tool.
 
+## Modules & settings
+
+Inspect what's installed and read/adjust world configuration:
+
+- `list_modules { active? }` / `get_module { id }` (READ) — every installed module with `id`, `title`,
+  `version`, `active`, `compatibility`, `authors`, and required dependencies (`requires`). Filter with
+  `active: true`/`false`. This is **read-only** — the bridge does not enable/disable modules (that needs a
+  world reload and could sever the bridge), so toggling stays a human action in Foundry's UI.
+- `list_settings { namespace?, include_values? }` (READ) — the registered settings registry: each entry is
+  `{ namespace, key, name, scope ("world"/"client"), config, type, default, choices? }`. Filter by
+  `namespace` (`"core"`, the system id like `"dnd5e"`, or a module id). `include_values: true` also reads
+  each current value (heavier — omit when you just need the catalogue).
+- `get_setting { namespace, key }` (READ) — one setting's current value. `NOT_FOUND` if the key isn't
+  registered.
+- `set_setting { namespace, key, value }` (WRITE) — change a registered setting. World-scoped settings
+  persist for everyone; client-scoped ones apply to the bridge user only. **Read it first** with
+  `get_setting`/`list_settings` and match the registered `type` (boolean/number/string/object) — a wrong
+  type or an unregistered key is rejected (`BAD_REQUEST`/`NOT_FOUND`). Reversible, but some `core`/system
+  settings change world behaviour, so confirm intent before flipping anything unfamiliar.
+
 ## Folder filing
 
 - `create_folder({type, name, parent?})` creates a folder for documents of `type` (Actor / Item / JournalEntry / Scene). `parent` is an optional folder `_id` for nesting.

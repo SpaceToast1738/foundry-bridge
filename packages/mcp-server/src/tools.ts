@@ -1349,6 +1349,75 @@ export function buildToolDefinitions(): ToolDef[] {
   });
 
   tools.push({
+    name: "list_modules",
+    description:
+      "List installed modules with id, title, version, active state, compatibility, authors, and required dependencies. Pass `active: true`/`false` to filter. READ — inspect what's installed and enabled.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        active: { type: "boolean", description: "Filter to only active (true) or inactive (false) modules." },
+      },
+      required: [],
+    },
+  });
+
+  tools.push({
+    name: "get_module",
+    description:
+      "Get one module's full details by id (title, version, active, compatibility, authors, requires, description).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Module id (see list_modules)." },
+      },
+      required: ["id"],
+    },
+  });
+
+  tools.push({
+    name: "list_settings",
+    description:
+      "List registered world/system/module settings: { namespace, key, name, scope (world/client), config, type, default, choices? }. Filter with `namespace` (e.g. \"core\", \"dnd5e\", a module id). Pass `include_values: true` to also read each current value (heavier). READ.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        namespace: { type: "string", description: "Only settings in this namespace (e.g. \"core\", \"dnd5e\", a module id)." },
+        include_values: { type: "boolean", description: "Also fetch each setting's current value (default false)." },
+      },
+      required: [],
+    },
+  });
+
+  tools.push({
+    name: "get_setting",
+    description:
+      "Read one setting's current value by namespace + key. NOT_FOUND if the key isn't registered (use list_settings).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        namespace: { type: "string", description: "Setting namespace (e.g. \"core\", \"dnd5e\", a module id)." },
+        key: { type: "string", description: "Setting key (see list_settings)." },
+      },
+      required: ["namespace", "key"],
+    },
+  });
+
+  tools.push({
+    name: "set_setting",
+    description:
+      "Set a registered setting's value (game.settings.set) — world-scoped settings persist for everyone; client-scoped ones apply to the bridge user. WRITE; reversible. NOT_FOUND if the key isn't registered. Read the current value with get_setting first; match its type (boolean/number/string/object).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        namespace: { type: "string", description: "Setting namespace (e.g. \"core\", \"dnd5e\", a module id)." },
+        key: { type: "string", description: "Setting key (see list_settings)." },
+        value: { description: "New value; must match the setting's registered type." },
+      },
+      required: ["namespace", "key", "value"],
+    },
+  });
+
+  tools.push({
     name: "deal_cards",
     description:
       "Deal cards from a deck to one or more hands/piles. `deck` and each `to` entry are card-stack refs (_id/name); `number` per hand (default 1).",
@@ -1618,6 +1687,16 @@ export async function dispatchTool(
       return ctx.relay.call(Method.ACTOR_CREATE, params);
     case "grant_item":
       return ctx.relay.call(Method.ACTOR_GRANT_ITEM, params);
+    case "list_modules":
+      return ctx.relay.call(Method.MODULES_LIST, params);
+    case "get_module":
+      return ctx.relay.call(Method.MODULE_GET, params);
+    case "list_settings":
+      return ctx.relay.call(Method.SETTINGS_LIST, params);
+    case "get_setting":
+      return ctx.relay.call(Method.SETTING_GET, params);
+    case "set_setting":
+      return ctx.relay.call(Method.SETTING_SET, params);
     case "list_conditions":
       return ctx.relay.call(Method.CONDITIONS_LIST, params);
     case "toggle_condition":

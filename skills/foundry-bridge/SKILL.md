@@ -60,6 +60,13 @@ Browse before uploading to avoid duplicates. Foundry's uploader enforces an allo
 practical size ceiling is ~12 MB, so a refused/oversize upload errors rather than silently succeeding.
 (`upload_image` is a legacy alias of `upload_file`.)
 
+## Modules & settings
+`list_modules` / `get_module` to see what's installed (version, active, dependencies) — read-only; the
+bridge deliberately can't enable/disable modules (that needs a world reload). `list_settings` (filter by
+`namespace`: `core`, the system id, or a module id; `include_values` to read values too) → `get_setting`
+to read one → `set_setting` to change a **registered** world/client setting. Always read a setting before
+writing it and match its registered type; confirm before flipping unfamiliar `core`/system settings.
+
 ## Reusing existing content
 Need a monster, spell, item, or premade content? Browse packs with `list_compendiums` /
 `search_compendium` and pull copies in with `import_from_compendium` (optionally into a folder) rather

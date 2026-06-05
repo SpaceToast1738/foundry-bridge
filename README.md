@@ -178,6 +178,17 @@ All combat tools return `{ round, turn, combatants:[{ name, initiative, tokenId 
 | `browse_files` | read | List directories/files under a data path (e.g. `worlds/<id>/assets`). |
 | `upload_file` | write | Upload any file from base64 into data storage — images, audio, video, PDF/fonts/JSON (`content_type?` overrides the inferred MIME). Returns the stored `path` (set it on a doc via `modify_document {img}`). Subject to Foundry's allowed-extension list; keep under ~12 MB. `upload_image` is a legacy alias. |
 
+### Modules & settings
+| Tool | Tier | Description |
+|------|------|-------------|
+| `list_modules` | read | List installed modules (id, title, version, active, compatibility, authors, requires). Filter with `active`. |
+| `get_module` | read | One module's full details by `id`. |
+| `list_settings` | read | Registered settings (namespace, key, name, scope, type, default, choices). Filter by `namespace`; `include_values` to also read current values. |
+| `get_setting` | read | Read one setting's current value by `namespace` + `key`. |
+| `set_setting` | write | Set a registered setting (`game.settings.set`). World-scoped persists for all; reversible. Match the registered type. |
+
+> Module **enable/disable** is intentionally not exposed — it requires a world reload that would briefly sever (or, for this module, permanently sever) the bridge. Toggle modules from the Foundry UI.
+
 ### D&D 5e (system adapter)
 System-aware tools that only function on a **dnd5e** world (`BAD_REQUEST` otherwise); on 5e, prefer
 these over generic `apply_damage` as they respect damage types and traits.

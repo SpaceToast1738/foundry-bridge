@@ -68,8 +68,31 @@ export interface FakeGameOptions {
   combat?: unknown;
   messages?: FakeDoc[];
   time?: unknown;
-  modules?: Record<string, { version?: string; active?: boolean }>;
+  modules?: Record<
+    string,
+    {
+      version?: string;
+      active?: boolean;
+      title?: string;
+      compatibility?: { minimum?: string; verified?: string; maximum?: string };
+      authors?: Array<{ name?: string } | string>;
+      relationships?: { requires?: Array<{ id?: string }> };
+      description?: string;
+    }
+  >;
   settings?: Record<string, unknown>;
+  /** Registered setting definitions, surfaced via game.settings.settings. */
+  settingDefs?: Array<{
+    namespace: string;
+    key: string;
+    name?: string;
+    hint?: string;
+    scope?: string;
+    config?: boolean;
+    type?: unknown;
+    default?: unknown;
+    choices?: Record<string, string>;
+  }>;
   /** Skip installing default Document classes (Actor, Item, etc.) on globalThis. */
   skipDocumentClasses?: boolean;
 }
@@ -118,6 +141,22 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
   const settingsStore = new Map<string, unknown>(
     Object.entries(opts.settings ?? {}),
   );
+  const settingsRegistry = new Map<string, unknown>();
+  for (const def of opts.settingDefs ?? []) {
+    settingsRegistry.set(`${def.namespace}.${def.key}`, def);
+  }
+  const moduleInfos = Object.entries(opts.modules ?? {}).map(([id, m]) => ({
+    id,
+    ...m,
+  }));
+  const moduleById = new Map(moduleInfos.map((m) => [m.id, m]));
+  const modulesCol = {
+    get: (id: string) => moduleById.get(id),
+    contents: moduleInfos,
+    [Symbol.iterator]() {
+      return moduleInfos[Symbol.iterator]();
+    },
+  };
   const docClassRestore: Record<string, unknown> = {};
   const stores: Record<WritableType, FakeDoc[]> = {
     Actor: opts.actors ?? [],
@@ -163,11 +202,7 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
     combat: opts.combat,
     messages: makeCollection(opts.messages ?? []),
     time: opts.time,
-    modules: {
-      get(id: string) {
-        return opts.modules?.[id];
-      },
-    },
+    modules: modulesCol,
     packs: {
       contents: packsStore,
       get(id: string) {
@@ -183,6 +218,7 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
         settingsStore.set(key, value);
         return value;
       },
+      settings: settingsRegistry,
     },
   };
   (globalThis as { ui: unknown }).ui = { notifications: undefined };

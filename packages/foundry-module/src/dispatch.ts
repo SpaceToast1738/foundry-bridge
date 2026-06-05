@@ -83,6 +83,13 @@ import {
 import { handleMacroExecute } from "./handlers/macro.js";
 import { handleStatusGet } from "./handlers/status.js";
 import {
+  handleModuleGet,
+  handleModulesList,
+  handleSettingGet,
+  handleSettingSet,
+  handleSettingsList,
+} from "./handlers/config.js";
+import {
   handleCardsDeal,
   handleCardsDraw,
   handleCardsPass,
@@ -318,6 +325,16 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleCombatantUpdate(params as Parameters<typeof handleCombatantUpdate>[0]),
   [Method.COMBATANT_CONDITION]: (params) =>
     handleCombatantCondition(params as Parameters<typeof handleCombatantCondition>[0]),
+  [Method.MODULES_LIST]: (params) =>
+    handleModulesList(params as Parameters<typeof handleModulesList>[0]),
+  [Method.MODULE_GET]: (params) =>
+    handleModuleGet(params as Parameters<typeof handleModuleGet>[0]),
+  [Method.SETTINGS_LIST]: (params) =>
+    handleSettingsList(params as Parameters<typeof handleSettingsList>[0]),
+  [Method.SETTING_GET]: (params) =>
+    handleSettingGet(params as Parameters<typeof handleSettingGet>[0]),
+  [Method.SETTING_SET]: (params) =>
+    handleSettingSet(params as Parameters<typeof handleSettingSet>[0]),
 };
 
 export function registerHandler(method: Method, handler: Handler): void {

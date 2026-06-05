@@ -20,10 +20,40 @@ declare global {
     onChange?: (value: T) => void;
   }
 
+  interface FoundrySettingRegistration {
+    key?: string;
+    namespace?: string;
+    name?: string;
+    hint?: string;
+    scope?: string;
+    config?: boolean;
+    type?: unknown;
+    default?: unknown;
+    choices?: Record<string, string>;
+  }
+
   interface FoundrySettings {
     register<T>(namespace: string, key: string, data: FoundrySettingChoice<T>): void;
     get(namespace: string, key: string): unknown;
     set(namespace: string, key: string, value: unknown): Promise<unknown>;
+    /** The registry of every registered setting, keyed by "namespace.key". */
+    readonly settings?: Map<string, FoundrySettingRegistration>;
+  }
+
+  interface FoundryModuleInfo {
+    id: string;
+    title?: string;
+    version?: string;
+    active?: boolean;
+    compatibility?: { minimum?: string; verified?: string; maximum?: string };
+    authors?: Iterable<{ name?: string } | string>;
+    relationships?: { requires?: Iterable<{ id?: string }> };
+    description?: string;
+  }
+
+  interface FoundryModulesCollection extends Iterable<FoundryModuleInfo> {
+    get(id: string): FoundryModuleInfo | undefined;
+    readonly contents?: FoundryModuleInfo[];
   }
 
   interface FoundryGame {
@@ -51,9 +81,7 @@ declare global {
     readonly messages?: { contents: unknown[]; get(id: string): unknown };
     readonly socket?: { emit(...args: unknown[]): unknown };
     readonly packs?: { contents: unknown[]; get(id: string): unknown };
-    readonly modules?: {
-      get(id: string): { version?: string; active?: boolean } | undefined;
-    };
+    readonly modules?: FoundryModulesCollection;
     readonly time?: {
       readonly worldTime: number;
       advance(seconds: number): Promise<number> | number;

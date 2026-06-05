@@ -91,6 +91,11 @@ export const Method = {
   COMBATANT_DAMAGE: "combat.damage_combatant",
   COMBATANT_UPDATE: "combat.update_combatant",
   COMBATANT_CONDITION: "combat.combatant_condition",
+  MODULES_LIST: "modules.list",
+  MODULE_GET: "modules.get",
+  SETTINGS_LIST: "settings.list",
+  SETTING_GET: "settings.get",
+  SETTING_SET: "settings.set",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -186,6 +191,11 @@ export const methodSchema = z.enum([
   Method.COMBATANT_DAMAGE,
   Method.COMBATANT_UPDATE,
   Method.COMBATANT_CONDITION,
+  Method.MODULES_LIST,
+  Method.MODULE_GET,
+  Method.SETTINGS_LIST,
+  Method.SETTING_GET,
+  Method.SETTING_SET,
 ]);
 
 export const PermissionTier = {
@@ -283,6 +293,11 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.COMBATANT_DAMAGE]: PermissionTier.WRITE,
   [Method.COMBATANT_UPDATE]: PermissionTier.WRITE,
   [Method.COMBATANT_CONDITION]: PermissionTier.WRITE,
+  [Method.MODULES_LIST]: PermissionTier.READ,
+  [Method.MODULE_GET]: PermissionTier.READ,
+  [Method.SETTINGS_LIST]: PermissionTier.READ,
+  [Method.SETTING_GET]: PermissionTier.READ,
+  [Method.SETTING_SET]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.MACRO_EXECUTE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
@@ -774,6 +789,29 @@ export const paramSchemas = {
     combatant: z.string().min(1),
     condition: z.string().min(1),
     active: z.boolean().optional(),
+  }),
+  [Method.MODULES_LIST]: z
+    .object({
+      active: z.boolean().optional(),
+    })
+    .optional(),
+  [Method.MODULE_GET]: z.object({
+    id: z.string().min(1),
+  }),
+  [Method.SETTINGS_LIST]: z
+    .object({
+      namespace: z.string().min(1).optional(),
+      include_values: z.boolean().optional(),
+    })
+    .optional(),
+  [Method.SETTING_GET]: z.object({
+    namespace: z.string().min(1),
+    key: z.string().min(1),
+  }),
+  [Method.SETTING_SET]: z.object({
+    namespace: z.string().min(1),
+    key: z.string().min(1),
+    value: z.unknown(),
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 
