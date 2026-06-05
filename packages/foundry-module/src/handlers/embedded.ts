@@ -11,6 +11,7 @@ import {
   isWritableDocumentType,
 } from "../collections.js";
 import { assertBulkLimit, type PermissionState } from "../permissions.js";
+import { DRY_RUN_NOTE, buildUpdateEntry } from "./update-utils.js";
 
 interface EmbeddedParent {
   createEmbeddedDocuments(
@@ -75,9 +76,19 @@ export async function handleEmbeddedCreate(
 
 export async function handleEmbeddedUpdate(
   params: ParamsFor<typeof Method.EMBEDDED_UPDATE>,
-): Promise<{ parent_id: string; embedded: string; count: number; documents: Record<string, unknown>[] }> {
+): Promise<Record<string, unknown>> {
   const parent = resolveParent(params.parent_type, params.parent_id);
-  const updated = await parent.updateEmbeddedDocuments(params.embedded, params.updates);
+  const updates = params.updates.map(buildUpdateEntry);
+  if (params.dry_run) {
+    return {
+      dry_run: true,
+      parent_id: params.parent_id,
+      embedded: params.embedded,
+      changes: updates,
+      note: DRY_RUN_NOTE,
+    };
+  }
+  const updated = await parent.updateEmbeddedDocuments(params.embedded, updates);
   return {
     parent_id: params.parent_id,
     embedded: params.embedded,
@@ -89,7 +100,16 @@ export async function handleEmbeddedUpdate(
 export async function handleEmbeddedDelete(
   params: ParamsFor<typeof Method.EMBEDDED_DELETE>,
   state: PermissionState,
-): Promise<{ parent_id: string; embedded: string; count: number; ids: string[] }> {
+): Promise<Record<string, unknown>> {
+  if (params.dry_run) {
+    return {
+      dry_run: true,
+      parent_id: params.parent_id,
+      embedded: params.embedded,
+      would_delete: params.ids,
+      note: DRY_RUN_NOTE,
+    };
+  }
   assertBulkLimit(Method.EMBEDDED_DELETE, params.ids.length, state);
   const parent = resolveParent(params.parent_type, params.parent_id);
   const deleted = await parent.deleteEmbeddedDocuments(params.embedded, params.ids);

@@ -1,6 +1,6 @@
 # foundry-bridge
 
-Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — paginated/sorted reads and search across collections, generic document CRUD, embedded documents (journal pages, actor items, map walls/lights/notes, timed active effects), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, scene creation + map geometry (walls/doors/lights/notes), dice & roll tables, combat encounters (incl. per-combatant damage/conditions/defeated), asset upload, actor operations (conditions, ownership, HP), audio/playlist building, chat-log reading, document duplication, player presentation (show/pull/ping), scene environment, cards & decks, game-time control, measured templates (AoE), compendium import **and export**, and macro execution, plus an optional D&D-5e adapter (typed damage, rolls, rests, spell slots, currency, XP, hit dice, death saves, concentration, and item use / attack rolls) — all gated by read/write/destructive permission tiers. A `get_status` health probe (running-code version, relay stats, launcher diagnostics) + `get_recent_activity` log, bounded waits on headless-prone calls, and a one-command redeploy keep it diagnosable in production.
+Documented-API Foundry VTT ⇄ MCP bridge. Templated on [adambdooley/foundry-vtt-mcp](https://github.com/adambdooley/foundry-vtt-mcp). Lets an MCP client read, search, organise, and edit a Foundry world through Foundry's own client-side document API — paginated/sorted reads and search across collections, generic document CRUD, embedded documents (journal pages, actor items, map walls/lights/notes, timed active effects), folder filing, compendium browse + import, UUID cross-links, chat, scenes & tokens, scene creation + map geometry (walls/doors/lights/notes), dice & roll tables, combat encounters (incl. per-combatant damage/conditions/defeated), asset upload, actor operations (conditions, ownership, HP), audio/playlist building, chat-log reading, document duplication, player presentation (show/pull/ping), scene environment, cards & decks, game-time control, measured templates (AoE), compendium import **and export**, and macro execution, plus an optional D&D-5e adapter (typed damage, rolls, rests, spell slots, currency, XP, hit dice, death saves, concentration, and item use / attack rolls) — all gated by read/write/destructive permission tiers. A `get_status` health probe (running-code version, relay stats, launcher diagnostics) + `get_recent_activity` log, bounded waits on headless-prone calls, a one-command redeploy, `dry_run` previews + `unset` field-deletion on the CRUD tools, and inline-size annotations on heavy reads keep it diagnosable and safe in production.
 
 See [HANDOFF.md on foundry-mcp:fix/audit-and-sdk-1x](https://github.com/SpaceToast1738/foundry-mcp/blob/fix/audit-and-sdk-1x/HANDOFF.md) for background on why we pivoted away from the raw-WebSocket approach.
 
@@ -68,9 +68,9 @@ it). Single-gets take `_id` (preferred) or `name`. Every result carries the docu
 ### Documents
 | Tool | Tier | Description |
 |------|------|-------------|
-| `create_document` | write | Create one or more top-level documents of a type (`Actor`, `Item`, `JournalEntry`, `Folder`, `Scene`, `User`, `RollTable`, `Playlist`, `Macro`, `Cards`). |
-| `modify_document` | write | Apply one or more deep-merged updates to a document by `_id`. |
-| `delete_document` | destructive | Delete documents by `_id`. Permanent; bulk-limited. |
+| `create_document` | write | Create one or more top-level documents of a type (`Actor`, `Item`, `JournalEntry`, `Folder`, `Scene`, `User`, `RollTable`, `Playlist`, `Macro`, `Cards`). Supports `dry_run`. |
+| `modify_document` | write | Apply one or more deep-merged updates to a document by `_id`. Each entry supports `unset: ["dotted.path"]` to **remove** fields; the call supports `dry_run` (preview the diff). |
+| `delete_document` | destructive | Delete documents by `_id`. Permanent; bulk-limited. Supports `dry_run` (lists what would be deleted). |
 | `duplicate_document` | write | Clone a document (carries embedded items/pages); optional new name/folder. |
 
 ### Embedded documents
@@ -78,8 +78,8 @@ For documents that live inside a parent — journal **pages** (`JournalEntryPage
 | Tool | Tier | Description |
 |------|------|-------------|
 | `create_embedded` | write | Add embedded docs to a parent (e.g. append a journal page, add actor items). |
-| `update_embedded` | write | Edit embedded docs in place (each update needs the embedded `_id`). |
-| `delete_embedded` | destructive | Delete embedded docs by `_id`. Permanent; bulk-limited. |
+| `update_embedded` | write | Edit embedded docs in place (each update needs the embedded `_id`). Supports `unset` + `dry_run`. |
+| `delete_embedded` | destructive | Delete embedded docs by `_id`. Permanent; bulk-limited. Supports `dry_run`. |
 
 The `embedded` name passes straight to Foundry, so any type works — including **map geometry** on a
 Scene (`"Wall"`, `"AmbientLight"`, `"Note"`, `"Tile"`, `"Drawing"`) and **timed `ActiveEffect`s** on an

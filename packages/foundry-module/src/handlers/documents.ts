@@ -18,6 +18,7 @@ import {
   isWritableDocumentType,
 } from "../collections.js";
 import { assertBulkLimit, type PermissionState } from "../permissions.js";
+import { DRY_RUN_NOTE, buildUpdateEntry, previewUpdate } from "./update-utils.js";
 
 export function handleDocumentsList(
   params: ParamsFor<typeof Method.DOCUMENTS_LIST>,
@@ -118,8 +119,11 @@ function resolveDocClass(type: string) {
 
 export async function handleDocumentsCreate(
   params: ParamsFor<typeof Method.DOCUMENTS_CREATE>,
-): Promise<{ type: string; count: number; documents: Record<string, unknown>[] }> {
+): Promise<Record<string, unknown>> {
   const { cls, type } = resolveDocClass(params.type);
+  if (params.dry_run) {
+    return { dry_run: true, type, would_create: params.data, note: DRY_RUN_NOTE };
+  }
   const created = await cls.createDocuments(params.data);
   return {
     type,
@@ -139,8 +143,17 @@ export async function handleDocumentsUpdate(
       `${type} ${params._id} not found`,
     );
   }
+  if (params.dry_run) {
+    return {
+      dry_run: true,
+      type,
+      _id: params._id,
+      changes: previewUpdate(collection.get(params._id), params.updates),
+      note: DRY_RUN_NOTE,
+    };
+  }
   for (const update of params.updates) {
-    await cls.updateDocuments([{ ...update, _id: params._id }]);
+    await cls.updateDocuments([{ ...buildUpdateEntry(update), _id: params._id }]);
   }
   const finalDoc = collection.get(params._id);
   return docToObject(finalDoc);
@@ -180,8 +193,17 @@ export async function handleDocumentsDuplicate(
 export async function handleDocumentsDelete(
   params: ParamsFor<typeof Method.DOCUMENTS_DELETE>,
   state: PermissionState,
-): Promise<{ type: string; count: number; ids: string[] }> {
+): Promise<Record<string, unknown>> {
   const { cls, type } = resolveDocClass(params.type);
+  if (params.dry_run) {
+    const collection = getCollection(collectionForType(type));
+    const wouldDelete = params.ids.map((id) => {
+      const raw = collection?.get(id);
+      const o = raw ? docToObject(raw) : {};
+      return { _id: (o._id as string) ?? id, name: o.name, type: o.type };
+    });
+    return { dry_run: true, type, would_delete: wouldDelete, note: DRY_RUN_NOTE };
+  }
   assertBulkLimit(Method.DOCUMENTS_DELETE, params.ids.length, state);
   const deleted = await cls.deleteDocuments(params.ids);
   const ids = deleted

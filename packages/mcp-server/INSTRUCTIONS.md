@@ -65,8 +65,17 @@ target's `uuid` first (via `get_*` or `search_documents`), then write the link i
 
 - `create_document` takes `type` (Actor / Item / JournalEntry / Folder / Scene / User) and `data: [{...}]`. Provide at minimum a `name`.
 - `modify_document` takes `type`, `_id`, and `updates: [{...}]`. Updates are applied in order and deep-merged by Foundry.
+  - **Removing a field:** deep-merge can only *set* keys. To delete one, add `unset: ["dotted.path", …]`
+    to an update entry (you can set and unset in one call). The bridge translates these to Foundry's
+    deletion syntax — don't hand-craft `-=` keys. Never unset `_id`/`_stats`.
 - `delete_document` takes `type` and `ids: [...]`. **Permanent.** Subject to the destructive tier and the configured bulk limit.
 - `duplicate_document` takes `type`, `ref`, optional `name`/`folder` — clones a document (and its embedded items/pages). Handy for reskinning an NPC or item.
+
+**Preview before you write (`dry_run`).** `create_document`, `modify_document`, `delete_document`,
+`update_embedded`, and `delete_embedded` accept `dry_run: true` — they return what *would* happen
+(a from→to diff / `would_delete` / `would_create`) **without persisting**. Use it before destructive or
+unfamiliar edits to confirm you're touching the right thing. Caveat: the preview shows your **direct field
+writes**, not downstream derived-data / Active-Effect / hook recomputation.
 
 ## Building documents & journals
 
@@ -163,8 +172,9 @@ Some documents live *inside* a parent: JournalEntry **pages** (`JournalEntryPage
 
 - `create_embedded` — append e.g. a page to a journal, or items to an actor:
   `{ parent_type, parent_id, embedded, data: [ … ] }`.
-- `update_embedded` — edit one in place; each update object must include the embedded `_id`.
-- `delete_embedded` — remove by `_id` (destructive tier + bulk limit; permanent).
+- `update_embedded` — edit one in place; each update object must include the embedded `_id`. Supports
+  `unset: ["dotted.path"]` to remove fields, and `dry_run: true` to preview.
+- `delete_embedded` — remove by `_id` (destructive tier + bulk limit; permanent). Supports `dry_run`.
 
 Prefer these over replacing a parent's whole `pages`/`items` array. Inspect the parent with `get_*`
 first to match the embedded document's schema.

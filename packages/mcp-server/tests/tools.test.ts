@@ -67,6 +67,17 @@ describe("buildToolDefinitions", () => {
     expect(names).not.toContain("upload_file"); // we use upload_image
     expect(names).not.toContain("choose_foundry_instance");
   });
+
+  it("annotates heavy single-gets with a larger result-size ceiling", () => {
+    const tools = buildToolDefinitions() as { name: string; _meta?: Record<string, unknown> }[];
+    const by = (n: string) => tools.find((t) => t.name === n);
+    for (const n of ["get_actor", "get_journal", "get_scene"]) {
+      expect(by(n)?._meta).toEqual({ "anthropic/maxResultSizeChars": 200_000 });
+    }
+    // a light single-get and a list tool carry no annotation
+    expect(by("get_item")?._meta).toBeUndefined();
+    expect(by("get_actors")?._meta).toBeUndefined();
+  });
 });
 
 describe("dispatchTool", () => {

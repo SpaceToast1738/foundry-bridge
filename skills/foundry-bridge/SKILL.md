@@ -36,6 +36,9 @@ rather than trusting it.
   don't retry a `FORBIDDEN`.
 - **Confirm before bulk or structural changes** (moving many entries, renaming folders, mass edits).
   Propose the plan first.
+- **Preview risky writes with `dry_run: true`** (on create/modify/delete_document and update/delete_embedded)
+  to see the diff / what would be deleted before committing. To *remove* a field (not just set one), pass
+  `unset: ["dotted.path"]` on a `modify_document`/`update_embedded` entry — don't hand-craft `-=` keys.
 
 ## Building journals & documents
 Journals are **multi-page**: pass a `pages` array — one text page per section

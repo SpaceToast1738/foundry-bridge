@@ -30,14 +30,19 @@ interface ToolDef {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  _meta?: Record<string, unknown>;
 }
 
+// `heavy` single-gets return a full nested document that can blow past Claude
+// Code's default per-tool output threshold (and get spilled to a file). The
+// _meta annotation raises that threshold so they come back inline; other MCP
+// clients ignore it.
 const READABLE_COLLECTIONS = [
-  { tool: "actors", singular: "actor", collection: "actors" },
+  { tool: "actors", singular: "actor", collection: "actors", heavy: true },
   { tool: "items", singular: "item", collection: "items" },
-  { tool: "journals", singular: "journal", collection: "journal" },
+  { tool: "journals", singular: "journal", collection: "journal", heavy: true },
   { tool: "folders", singular: "folder", collection: "folders" },
-  { tool: "scenes", singular: "scene", collection: "scenes" },
+  { tool: "scenes", singular: "scene", collection: "scenes", heavy: true },
   { tool: "users", singular: "user", collection: "users" },
   { tool: "tables", singular: "table", collection: "tables" },
   { tool: "playlists", singular: "playlist", collection: "playlists" },
@@ -45,6 +50,8 @@ const READABLE_COLLECTIONS = [
   { tool: "cards", singular: "card", collection: "cards" },
   { tool: "combats", singular: "combat", collection: "combats" },
 ] as const;
+
+const HEAVY_READ_META = { "anthropic/maxResultSizeChars": 200_000 } as const;
 
 const listInputSchema = {
   type: "object",
@@ -153,6 +160,7 @@ export function buildToolDefinitions(): ToolDef[] {
       name: `get_${c.singular}`,
       description: `Get a single ${c.singular} by _id, id, or name.`,
       inputSchema: getInputSchema,
+      ...("heavy" in c && c.heavy ? { _meta: HEAVY_READ_META } : {}),
     });
   }
 
@@ -193,10 +201,16 @@ export function buildToolDefinitions(): ToolDef[] {
     },
   });
 
+  const dryRunProp = {
+    type: "boolean",
+    description:
+      "Preview only — return what WOULD change (a diff / would_delete / would_create) without persisting. Shows direct field writes, not downstream derived/Active-Effect recompute.",
+  } as const;
+
   tools.push({
     name: "create_document",
     description:
-      "Create one or more documents. Inspect an existing document of the same type with get_* first to learn the system-specific schema.",
+      "Create one or more documents. Inspect an existing document of the same type with get_* first to learn the system-specific schema. Pass dry_run:true to preview.",
     inputSchema: {
       type: "object",
       properties: {
@@ -206,6 +220,7 @@ export function buildToolDefinitions(): ToolDef[] {
           items: { type: "object", additionalProperties: true },
           description: "Documents to create. At minimum supply a name field.",
         },
+        dry_run: dryRunProp,
       },
       required: ["type", "data"],
     },
@@ -214,7 +229,7 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "modify_document",
     description:
-      "Apply one or more updates to a document. Each update is deep-merged. Inspect the document first with get_* so the field paths are correct for this game system.",
+      "Apply one or more updates to a document. Each update is deep-merged. To REMOVE a field, add `unset: [\"dotted.path\", …]` to an update entry (sets and unsets in one call). Inspect the document first with get_* so the field paths are correct. Pass dry_run:true to preview the diff first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -223,8 +238,10 @@ export function buildToolDefinitions(): ToolDef[] {
         updates: {
           type: "array",
           items: { type: "object", additionalProperties: true },
-          description: "Updates to apply in order.",
+          description:
+            "Updates to apply in order. Each entry deep-merges its fields; an optional `unset: [\"dotted.path\"]` removes fields (do NOT use _id/_stats).",
         },
+        dry_run: dryRunProp,
       },
       required: ["type", "_id", "updates"],
     },
@@ -233,7 +250,7 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "delete_document",
     description:
-      "Delete one or more documents by _id. Subject to the bridge's destructive-tier toggle and bulk limit.",
+      "Delete one or more documents by _id. Subject to the bridge's destructive-tier toggle and bulk limit. Pass dry_run:true to list what would be deleted first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -243,6 +260,7 @@ export function buildToolDefinitions(): ToolDef[] {
           items: { type: "string" },
           description: "The _ids to delete.",
         },
+        dry_run: dryRunProp,
       },
       required: ["type", "ids"],
     },
@@ -283,7 +301,7 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "update_embedded",
     description:
-      "Update embedded documents in place — e.g. edit a single journal page or one actor item. Each update object must include the embedded document's _id. Inspect the parent first so field paths are correct.",
+      "Update embedded documents in place — e.g. edit a single journal page or one actor item. Each update object must include the embedded document's _id. Add `unset: [\"dotted.path\"]` to an entry to remove fields. Inspect the parent first. Pass dry_run:true to preview.",
     inputSchema: {
       type: "object",
       properties: {
@@ -291,8 +309,10 @@ export function buildToolDefinitions(): ToolDef[] {
         updates: {
           type: "array",
           items: { type: "object", additionalProperties: true },
-          description: "Updates to apply; each must include the embedded `_id`.",
+          description:
+            "Updates to apply; each must include the embedded `_id`. Optional `unset: [\"dotted.path\"]` removes fields.",
         },
+        dry_run: dryRunProp,
       },
       required: ["parent_type", "parent_id", "embedded", "updates"],
     },
@@ -301,7 +321,7 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "delete_embedded",
     description:
-      "Delete embedded documents (e.g. a journal page or actor item) by _id. Subject to the destructive tier and bulk limit. Permanent.",
+      "Delete embedded documents (e.g. a journal page or actor item) by _id. Subject to the destructive tier and bulk limit. Permanent. Pass dry_run:true to list what would be deleted first.",
     inputSchema: {
       type: "object",
       properties: {
@@ -311,6 +331,7 @@ export function buildToolDefinitions(): ToolDef[] {
           items: { type: "string" },
           description: "The embedded document _ids to delete.",
         },
+        dry_run: dryRunProp,
       },
       required: ["parent_type", "parent_id", "embedded", "ids"],
     },

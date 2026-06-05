@@ -330,15 +330,20 @@ export const paramSchemas = {
   [Method.DOCUMENTS_CREATE]: z.object({
     type: z.string().min(1),
     data: z.array(z.record(z.string(), z.unknown())).min(1),
+    dry_run: z.boolean().optional(),
   }),
+  // `updates` entries are deep-merged; an optional `unset: string[]` (dotted
+  // paths) on an entry removes keys (translated to Foundry's -= syntax).
   [Method.DOCUMENTS_UPDATE]: z.object({
     type: z.string().min(1),
     _id: z.string().min(1),
     updates: z.array(z.record(z.string(), z.unknown())).min(1),
+    dry_run: z.boolean().optional(),
   }),
   [Method.DOCUMENTS_DELETE]: z.object({
     type: z.string().min(1),
     ids: z.array(z.string().min(1)).min(1),
+    dry_run: z.boolean().optional(),
   }),
   [Method.EMBEDDED_CREATE]: z.object({
     parent_type: z.string().min(1),
@@ -351,12 +356,14 @@ export const paramSchemas = {
     parent_id: z.string().min(1),
     embedded: z.string().min(1),
     updates: z.array(z.record(z.string(), z.unknown())).min(1),
+    dry_run: z.boolean().optional(),
   }),
   [Method.EMBEDDED_DELETE]: z.object({
     parent_type: z.string().min(1),
     parent_id: z.string().min(1),
     embedded: z.string().min(1),
     ids: z.array(z.string().min(1)).min(1),
+    dry_run: z.boolean().optional(),
   }),
   [Method.COMPENDIUM_LIST]: z
     .object({ type: z.string().min(1).optional() })
