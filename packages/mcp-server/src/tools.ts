@@ -722,21 +722,24 @@ export function buildToolDefinitions(): ToolDef[] {
     },
   });
 
-  tools.push({
-    name: "upload_image",
-    description:
-      "Upload a file (image/audio/etc.) to Foundry's data storage from base64 data. Returns the stored path, which you can set as a document image via modify_document { img: <path> }. Keep files under ~12 MB.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        target: { type: "string", description: "Destination directory, e.g. \"worlds/<id>/assets/avatars\"." },
-        filename: { type: "string", description: "Filename including extension, e.g. \"goblin.png\"." },
-        data_base64: { type: "string", description: "Base64-encoded file contents." },
-        source: { type: "string", description: "Storage source; defaults to \"data\"." },
+  for (const uploadName of ["upload_file", "upload_image"]) {
+    tools.push({
+      name: uploadName,
+      description:
+        "Upload a file to Foundry's data storage from base64 data — images, audio, video, and other types (PDF handouts, fonts, JSON). Returns the stored path, which you attach to a document (e.g. modify_document { img: <path> }, a journal/tile/scene-background field, or a playlist sound). The MIME type is inferred from the filename extension; pass content_type to override. Foundry's uploader enforces its own allowed-extension list (geared to media), so non-media types may be refused depending on your Foundry config/permissions. Keep files under ~12 MB (base64 over the relay; the gateway caps bodies at 16 MB). upload_image is a legacy alias of this tool.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          target: { type: "string", description: "Destination directory, e.g. \"worlds/<id>/assets/avatars\"." },
+          filename: { type: "string", description: "Filename including extension, e.g. \"goblin.png\" or \"handout.pdf\"." },
+          data_base64: { type: "string", description: "Base64-encoded file contents." },
+          source: { type: "string", description: "Storage source; defaults to \"data\"." },
+          content_type: { type: "string", description: "Optional MIME type override (e.g. \"application/pdf\"). Defaults to a type inferred from the extension." },
+        },
+        required: ["target", "filename", "data_base64"],
       },
-      required: ["target", "filename", "data_base64"],
-    },
-  });
+    });
+  }
 
   tools.push({
     name: "create_actor",
@@ -1608,6 +1611,7 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMPENDIUM_DELETE, params);
     case "browse_files":
       return ctx.relay.call(Method.FILES_BROWSE, params);
+    case "upload_file":
     case "upload_image":
       return ctx.relay.call(Method.FILES_UPLOAD, params);
     case "create_actor":

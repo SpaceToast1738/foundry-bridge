@@ -233,14 +233,22 @@ the world until imported.
 
 Prefer importing system content over hand-building it. Import first, then inspect/modify the world copy.
 
-## Assets & images
+## Assets & files
 
 - `browse_files { target, source?, type? }` — list directories/files under a data path (e.g.
-  `worlds/<id>/assets`). Discover existing art before uploading duplicates.
-- `upload_image { target, filename, data_base64, source? }` — upload a file from base64 into Foundry's
-  data storage; returns the stored `path`. Keep files under ~12 MB.
+  `worlds/<id>/assets`). Discover existing files before uploading duplicates.
+- `upload_file { target, filename, data_base64, source?, content_type? }` — upload **any** file from
+  base64 into Foundry's data storage (images, audio, video, plus non-media like PDF handouts, fonts,
+  JSON). Returns the stored `path`. The MIME type is inferred from the filename extension; pass
+  `content_type` only to override an ambiguous one. (`upload_image` is a legacy alias of this tool.)
+- **Limits (both come from Foundry, not the bridge):** keep files under **~12 MB** (base64 over the
+  relay; the gateway caps request bodies at 16 MB), and note that Foundry's uploader enforces its own
+  **allowed-extension list** — it's geared to media, so exotic/non-media types may be refused depending
+  on the Foundry config and the bridge user's permissions. A refusal surfaces as an upload error, not a
+  silent success.
 - To use an uploaded asset, set it on a document with `modify_document { img: "<path>" }` (or the
-  relevant image field, e.g. a scene background or token texture). No separate tool.
+  relevant field — a scene background, token texture, journal page `src`, or a `PlaylistSound` path). No
+  separate tool.
 
 ## Folder filing
 

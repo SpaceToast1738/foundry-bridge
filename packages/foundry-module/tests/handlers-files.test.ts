@@ -5,6 +5,7 @@ interface Uploaded {
   target: string;
   name: string;
   size: number;
+  type: string;
 }
 
 function installFilePicker(captured: { uploads: Uploaded[] }) {
@@ -19,7 +20,13 @@ function installFilePicker(captured: { uploads: Uploaded[] }) {
       target: string,
       file: File,
     ) => {
-      captured.uploads.push({ source, target, name: file.name, size: file.size });
+      captured.uploads.push({
+        source,
+        target,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
       return { path: `${target}/${file.name}` };
     },
   };
@@ -54,6 +61,33 @@ describe("file handlers", () => {
       name: "goblin.png",
     });
     expect(captured.uploads[0].size).toBeGreaterThan(0);
+  });
+
+  it("infers a MIME type from the extension for non-image files", async () => {
+    const data_base64 = Buffer.from("%PDF-1.4 fake").toString("base64");
+    await handleFilesUpload({
+      target: "worlds/x/handouts",
+      filename: "map-key.pdf",
+      data_base64,
+    });
+    expect(captured.uploads[0]).toMatchObject({
+      name: "map-key.pdf",
+      type: "application/pdf",
+    });
+  });
+
+  it("honors an explicit content_type override", async () => {
+    const data_base64 = Buffer.from("{}").toString("base64");
+    await handleFilesUpload({
+      target: "worlds/x/data",
+      filename: "weird.dat",
+      data_base64,
+      content_type: "application/json",
+    });
+    expect(captured.uploads[0]).toMatchObject({
+      name: "weird.dat",
+      type: "application/json",
+    });
   });
 
   it("BAD_REQUEST on invalid base64", async () => {

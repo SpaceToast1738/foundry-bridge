@@ -52,9 +52,13 @@ don't invent your own styling. To add or edit a **single** journal page or actor
 `create_embedded`/`update_embedded` instead of rewriting the parent's whole `pages`/`items` array.
 The server's `INSTRUCTIONS.md` has the full document/page model.
 
-## Assets & images
-`browse_files` to find existing art; `upload_image` (base64) to add new art, then attach it with
-`modify_document { img: "<path>" }`. Browse before uploading to avoid duplicates.
+## Assets & files
+`browse_files` to find existing files; `upload_file` (base64) to add new ones — images **and** non-media
+(PDF handouts, fonts, JSON; `content_type?` overrides the inferred MIME) — then attach via
+`modify_document { img: "<path>" }` (or a scene background / journal page `src` / `PlaylistSound` path).
+Browse before uploading to avoid duplicates. Foundry's uploader enforces an allowed-extension list and the
+practical size ceiling is ~12 MB, so a refused/oversize upload errors rather than silently succeeding.
+(`upload_image` is a legacy alias of `upload_file`.)
 
 ## Reusing existing content
 Need a monster, spell, item, or premade content? Browse packs with `list_compendiums` /

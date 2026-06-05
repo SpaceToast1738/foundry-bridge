@@ -64,8 +64,14 @@ describe("buildToolDefinitions", () => {
   it("does not expose out-of-scope tools", () => {
     const tools = buildToolDefinitions();
     const names = tools.map((t) => t.name);
-    expect(names).not.toContain("upload_file"); // we use upload_image
     expect(names).not.toContain("choose_foundry_instance");
+  });
+
+  it("exposes both upload_file and its legacy upload_image alias", () => {
+    const tools = buildToolDefinitions();
+    const names = tools.map((t) => t.name);
+    expect(names).toContain("upload_file");
+    expect(names).toContain("upload_image");
   });
 
   it("annotates heavy single-gets with a larger result-size ceiling", () => {

@@ -172,11 +172,11 @@ Generic actor operations (core APIs / capability-detected — no system schema b
 
 All combat tools return `{ round, turn, combatants:[{ name, initiative, tokenId }] }`.
 
-### Assets & images
+### Assets & files
 | Tool | Tier | Description |
 |------|------|-------------|
 | `browse_files` | read | List directories/files under a data path (e.g. `worlds/<id>/assets`). |
-| `upload_image` | write | Upload a file from base64 into data storage; returns the stored `path` (set it on a doc via `modify_document {img}`). |
+| `upload_file` | write | Upload any file from base64 into data storage — images, audio, video, PDF/fonts/JSON (`content_type?` overrides the inferred MIME). Returns the stored `path` (set it on a doc via `modify_document {img}`). Subject to Foundry's allowed-extension list; keep under ~12 MB. `upload_image` is a legacy alias. |
 
 ### D&D 5e (system adapter)
 System-aware tools that only function on a **dnd5e** world (`BAD_REQUEST` otherwise); on 5e, prefer

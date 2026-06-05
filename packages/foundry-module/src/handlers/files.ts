@@ -44,9 +44,24 @@ const CONTENT_TYPES: Record<string, string> = {
   bmp: "image/bmp",
   webm: "video/webm",
   mp4: "video/mp4",
+  m4v: "video/mp4",
   ogg: "audio/ogg",
+  oga: "audio/ogg",
   mp3: "audio/mpeg",
   wav: "audio/wav",
+  flac: "audio/flac",
+  // Non-media. Foundry's FilePicker enforces its own upload allow-list, so some
+  // of these may be refused for non-admins — but when accepted the file carries
+  // a sensible MIME type instead of a generic octet-stream.
+  pdf: "application/pdf",
+  json: "application/json",
+  txt: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
 };
 
 function contentTypeFor(filename: string): string {
@@ -81,7 +96,7 @@ export async function handleFilesUpload(
   }
 
   const file = new File([buffer], params.filename, {
-    type: contentTypeFor(params.filename),
+    type: params.content_type ?? contentTypeFor(params.filename),
   });
   const res = await fp.upload(source, params.target, file, {}, { notify: false });
   if (res === false) {

@@ -478,6 +478,7 @@ export const paramSchemas = {
     filename: z.string().min(1),
     data_base64: z.string().min(1),
     source: z.string().min(1).optional(),
+    content_type: z.string().min(1).optional(),
   }),
   [Method.ACTOR_CREATE]: z.object({
     name: z.string().min(1),
