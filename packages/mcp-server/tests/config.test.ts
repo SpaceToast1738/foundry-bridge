@@ -23,6 +23,24 @@ describe("resolveRuntimeConfig", () => {
     expect(cfg.relayPort).toBe(31_414);
     expect(cfg.relayHost).toBe("127.0.0.1");
     expect(cfg.activeCredentialId).toBeUndefined();
+    expect(cfg.requestTimeoutMs).toBe(120_000);
+  });
+
+  it("honors FOUNDRY_BRIDGE_REQUEST_TIMEOUT_MS", () => {
+    const cfg = resolveRuntimeConfig(
+      { FOUNDRY_BRIDGE_REQUEST_TIMEOUT_MS: "180000" },
+      "/cwd",
+    );
+    expect(cfg.requestTimeoutMs).toBe(180_000);
+  });
+
+  it("rejects an invalid request timeout", () => {
+    expect(() =>
+      resolveRuntimeConfig({ FOUNDRY_BRIDGE_REQUEST_TIMEOUT_MS: "abc" }, "/cwd"),
+    ).toThrow(/Invalid FOUNDRY_BRIDGE_REQUEST_TIMEOUT_MS/);
+    expect(() =>
+      resolveRuntimeConfig({ FOUNDRY_BRIDGE_REQUEST_TIMEOUT_MS: "500" }, "/cwd"),
+    ).toThrow(/Invalid FOUNDRY_BRIDGE_REQUEST_TIMEOUT_MS/);
   });
 
   it("honors FOUNDRY_BRIDGE_PORT and FOUNDRY_BRIDGE_HOST", () => {

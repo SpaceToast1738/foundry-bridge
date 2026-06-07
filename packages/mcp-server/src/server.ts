@@ -153,6 +153,7 @@ async function main(): Promise<void> {
   const relay = new Relay({
     port: config.relayPort,
     host: config.relayHost,
+    requestTimeoutMs: config.requestTimeoutMs,
     logger,
   });
   await relay.start();
