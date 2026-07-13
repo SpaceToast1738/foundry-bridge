@@ -111,6 +111,8 @@ declare global {
 
   var Hooks: FoundryHooks;
   var game: FoundryGame;
+  /** Resolve a Document by its UUID (async; full document for compendium UUIDs). */
+  function fromUuid(uuid: string): Promise<unknown>;
   var ui: FoundryUI;
   var CONFIG: Record<string, unknown>;
   /** Injected by esbuild (scripts/bundle.mjs) from the manifest version; the

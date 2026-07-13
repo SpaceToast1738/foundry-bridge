@@ -6,6 +6,7 @@ import {
   handleDnd5eConcentration,
   handleDnd5eCurrency,
   handleDnd5eDeathSaves,
+  handleDnd5eEncounterBudget,
   handleDnd5eHitDice,
   handleDnd5eItemRoll,
   handleDnd5eRest,
@@ -485,5 +486,124 @@ describe("dnd5e item use / rolls", () => {
     await expect(
       handleDnd5eUseItem({ actor: { _id: "pc" }, item: { name: "Bow" } }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("dnd5e encounter budget", () => {
+  let restore: () => void;
+  afterEach(() => restore());
+
+  function install(opts: Record<string, unknown>): void {
+    restore = installFakeGame({ system: { id: "dnd5e", version: "5.3.3" }, ...opts });
+  }
+
+  it("sums party thresholds from levels", async () => {
+    install({});
+    const res = (await handleDnd5eEncounterBudget({
+      levels: [5, 5, 5, 5],
+      monsters: [{ cr: 2 }],
+    })) as { party: { thresholds: Record<string, number> }; monsters: Record<string, number>; difficulty: string };
+    // 4 x level-5 row [250,500,750,1100].
+    expect(res.party.thresholds).toEqual({ easy: 1000, medium: 2000, hard: 3000, deadly: 4400 });
+    // CR 2 = 450 XP, 1 monster, x1 → 450, below easy → trivial.
+    expect(res.monsters).toMatchObject({ count: 1, rawXp: 450, multiplier: 1, adjustedXp: 450 });
+    expect(res.difficulty).toBe("trivial");
+  });
+
+  it("applies the count multiplier and bands a deadly fight", async () => {
+    install({});
+    const res = (await handleDnd5eEncounterBudget({
+      levels: [5, 5, 5, 5],
+      monsters: [{ cr: 5, count: 4 }],
+    })) as { monsters: Record<string, number>; difficulty: string };
+    // CR 5 = 1800 each, 4 monsters → raw 7200, x2 → 14400.
+    expect(res.monsters).toMatchObject({ count: 4, rawXp: 7200, multiplier: 2, adjustedXp: 14400 });
+    expect(res.difficulty).toBe("deadly");
+  });
+
+  it("scores fractional CRs correctly", async () => {
+    install({});
+    const res = (await handleDnd5eEncounterBudget({
+      levels: [1],
+      monsters: [{ cr: 0.25 }, { cr: 0.125 }, { cr: 0.5 }],
+    })) as { monsters: Record<string, number> };
+    // 50 + 25 + 100 = 175.
+    expect(res.monsters.rawXp).toBe(175);
+    expect(res.monsters.count).toBe(3);
+  });
+
+  it("reads party levels from actors", async () => {
+    install({
+      actors: [
+        { _id: "p1", name: "P1", system: { details: { level: 5 } } },
+        { _id: "p2", name: "P2", system: { details: { level: 3 } } },
+      ],
+    });
+    const res = (await handleDnd5eEncounterBudget({
+      actors: [{ _id: "p1" }, { _id: "p2" }],
+      monsters: [{ cr: 1 }],
+    })) as { party: { levels: number[]; size: number } };
+    expect(res.party.levels.sort()).toEqual([3, 5]);
+    expect(res.party.size).toBe(2);
+  });
+
+  it("reads CR from a compendium ref via the index", async () => {
+    install({
+      packs: [
+        {
+          metadata: { id: "dnd5e.monsters", type: "Actor" },
+          documentName: "Actor",
+          getIndex: async (_o?: { fields?: string[] }) => ({
+            contents: [{ _id: "m1", name: "Goblin", system: { details: { cr: 0.25 } } }],
+          }),
+          getDocument: async () => undefined,
+        },
+      ],
+    });
+    const res = (await handleDnd5eEncounterBudget({
+      levels: [1],
+      monsters: [{ pack: "dnd5e.monsters", entry: { name: "Goblin" } }],
+    })) as { monsters: Record<string, number> };
+    expect(res.monsters.rawXp).toBe(50); // CR 0.25 = 50 XP.
+  });
+
+  it("shifts the multiplier column for a small party", async () => {
+    install({});
+    const res = (await handleDnd5eEncounterBudget({
+      levels: [5, 5],
+      party_size: 2,
+      monsters: [{ cr: 1, count: 3 }],
+    })) as { monsters: Record<string, number> };
+    // 3 monsters → base tier x2; party_size 2 (<3) bumps to x2.5.
+    expect(res.monsters.multiplier).toBe(2.5);
+  });
+
+  it("uses x0.5 for a 6+ party facing a single monster", async () => {
+    install({});
+    const res = (await handleDnd5eEncounterBudget({
+      levels: [5, 5, 5, 5, 5, 5],
+      monsters: [{ cr: 5 }],
+    })) as { monsters: Record<string, number> };
+    expect(res.monsters.multiplier).toBe(0.5);
+    expect(res.monsters.adjustedXp).toBe(900); // 1800 * 0.5
+  });
+
+  it("rounds a fractional CR>=1 instead of mispricing it", async () => {
+    install({});
+    const res = (await handleDnd5eEncounterBudget({
+      levels: [5],
+      monsters: [{ cr: 1.5 }],
+    })) as { monsters: Record<string, number> };
+    // 1.5 rounds to CR 2 = 450 XP (not the 155000 fallback).
+    expect(res.monsters.rawXp).toBe(450);
+  });
+
+  it("errors on a non-dnd5e world", async () => {
+    install({});
+    restore();
+    restore = installFakeGame({ system: { id: "pf2e", version: "1" } });
+    await expect(
+      handleDnd5eEncounterBudget({ levels: [1], monsters: [{ cr: 1 }] }),
+    ).rejects.toThrow();
   });
 });

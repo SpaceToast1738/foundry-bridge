@@ -41,6 +41,7 @@ import {
   handleCompendiumCreate,
   handleCompendiumDelete,
   handleCompendiumExport,
+  handleCompendiumGetEntry,
   handleCompendiumImport,
   handleCompendiumList,
   handleCompendiumSearch,
@@ -119,6 +120,7 @@ import {
   handleDnd5eApplyHealing,
   handleDnd5eAwardXp,
   handleDnd5eConcentration,
+  handleDnd5eEncounterBudget,
   handleDnd5eCurrency,
   handleDnd5eDeathSaves,
   handleDnd5eHitDice,
@@ -172,6 +174,10 @@ const handlers: Partial<Record<Method, Handler>> = {
   [Method.COMPENDIUM_SEARCH]: (params) =>
     handleCompendiumSearch(
       params as Parameters<typeof handleCompendiumSearch>[0],
+    ),
+  [Method.COMPENDIUM_GET_ENTRY]: (params) =>
+    handleCompendiumGetEntry(
+      params as Parameters<typeof handleCompendiumGetEntry>[0],
     ),
   [Method.COMPENDIUM_IMPORT]: (params) =>
     handleCompendiumImport(
@@ -247,6 +253,8 @@ const handlers: Partial<Record<Method, Handler>> = {
     handleDnd5eRest(params as Parameters<typeof handleDnd5eRest>[0]),
   [Method.DND5E_ACTOR_SUMMARY]: (params) =>
     handleDnd5eActorSummary(params as Parameters<typeof handleDnd5eActorSummary>[0]),
+  [Method.DND5E_ENCOUNTER_BUDGET]: (params) =>
+    handleDnd5eEncounterBudget(params as Parameters<typeof handleDnd5eEncounterBudget>[0]),
   [Method.TABLE_CREATE]: (params) =>
     handleTableCreate(params as Parameters<typeof handleTableCreate>[0]),
   [Method.TABLE_ADD_RESULTS]: (params) =>

@@ -158,6 +158,9 @@ because they respect damage types and traits:
 - `dnd5e_rest { actor|actors[]|group, type }` — `short` or `long` rest. `actors`/`group` (a Group actor)
   rest the whole party.
 - `dnd5e_actor_summary { actor }` — compact HP / AC / abilities / level-or-CR readout from the sheet.
+- `dnd5e_encounter_budget { levels?/actors?/group, monsters: [{ cr | pack+entry, count? }], party_size? }`
+  — price an encounter (2014 DMG): returns the party's easy/medium/hard/deadly XP thresholds, the raw and
+  count-adjusted monster XP, and the difficulty band. Read-only; monsters by CR or compendium ref.
 - `dnd5e_spell_slots { actor, level, action, amount? }` — `level` 1–9 or `"pact"`; `action`
   `use`/`recover`/`set` (clamped to max).
 - `dnd5e_currency { actor|actors[]|group, mode, changes }` — `mode` `add`/`set`; `changes` any of
@@ -229,7 +232,13 @@ the world until imported.
 
 - `list_compendiums` — available packs (id like `dnd5e.monsters`, label, document type, system);
   optional `type` filter.
-- `search_compendium { pack, query? }` — find entries by name; returns `_id`, `name`, `type`, `uuid`, `img`.
+- `search_compendium { pack?, query?, document_type?, cr?/cr_min?/cr_max?/creature_type?/size? }` — find
+  entries by name; returns `_id`, `name`, `type`, `uuid`, `img`, and the source `pack`. **Omit `pack`** to
+  search all packs (narrow with `document_type`, e.g. `Actor`). On a dnd5e world the CR/type/size filters
+  pull those fields into the index so you can find e.g. CR 3–5 dragons. Capped at `limit` across packs.
+- `get_compendium_entry { uuid | (pack + entry), compact? }` — fetch a FULL document (monster stat block,
+  spell, item) WITHOUT importing it. Reference by `uuid` (`Compendium.<pkg>.<pack>.<Type>.<id>`) or
+  `pack`+`entry` (`_id`/`name`). `compact: true` strips long HTML descriptions/biography to save tokens.
 - `import_from_compendium { pack, entries: [{ _id|name }], folder? }` — copy entries into the world as
   real documents (optionally into a folder). Imported documents receive fresh `_id`s.
 - `export_to_compendium { pack, type, entries: [{ _id|name }] }` — the reverse: write world documents

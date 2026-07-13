@@ -5,6 +5,7 @@ import {
   type ParamsFor,
 } from "@foundry-bridge/shared";
 import {
+  type DocRef,
   collectionForType,
   docToObject,
   findInCollection,
@@ -26,10 +27,29 @@ interface FoundryPack {
   metadata: PackMetadata;
   documentName: string;
   locked?: boolean;
-  getIndex(): Promise<{ contents: Record<string, unknown>[] }>;
+  getIndex(options?: { fields?: string[] }): Promise<{ contents: Record<string, unknown>[] }>;
   getDocument(id: string): Promise<unknown>;
   deleteCompendium?: () => Promise<unknown>;
 }
+
+/** Read a dotted path from an index entry, tolerating either flat-keyed
+ * (`raw["system.details.cr"]`) or nested (`raw.system.details.cr`) shapes —
+ * Foundry's docs don't pin down which getIndex({fields}) returns. */
+function pick(raw: Record<string, unknown>, dotPath: string): unknown {
+  if (dotPath in raw) return raw[dotPath];
+  let cur: unknown = raw;
+  for (const seg of dotPath.split(".")) {
+    if (cur === null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return cur;
+}
+
+const CREATURE_FIELDS = [
+  "system.details.cr",
+  "system.details.type.value",
+  "system.traits.size",
+];
 
 interface CompendiumCollectionClass {
   createCompendium(
@@ -65,6 +85,22 @@ function getPack(packId: string): FoundryPack {
   return pack;
 }
 
+/** Resolve a pack entry (by _id/id, name fallback) to its full document as a
+ * plain object. Shared by import and get_compendium_entry. */
+async function resolveEntrySource(pack: FoundryPack, ref: DocRef): Promise<Record<string, unknown>> {
+  const index = await pack.getIndex();
+  const wantId = ref._id ?? ref.id;
+  const entry = index.contents.find((e) => (wantId ? e._id === wantId : e.name === ref.name));
+  if (!entry) {
+    throw new BridgeError(ErrorCode.NOT_FOUND, `Pack entry not found by ref ${JSON.stringify(ref)}`);
+  }
+  const doc = await pack.getDocument(entry._id as string);
+  if (doc === undefined || doc === null) {
+    throw new BridgeError(ErrorCode.NOT_FOUND, `Pack entry document missing for ${String(entry._id)}`);
+  }
+  return docToObject(doc);
+}
+
 export function handleCompendiumList(
   params: ParamsFor<typeof Method.COMPENDIUM_LIST>,
 ): { count: number; packs: Record<string, unknown>[] } {
@@ -83,26 +119,122 @@ export function handleCompendiumList(
 
 export async function handleCompendiumSearch(
   params: ParamsFor<typeof Method.COMPENDIUM_SEARCH>,
-): Promise<{ pack: string; count: number; entries: Record<string, unknown>[] }> {
-  const pack = getPack(params.pack);
-  const index = await pack.getIndex();
+): Promise<{ pack: string | null; count: number; entries: Record<string, unknown>[] }> {
   const needle = params.query?.toLowerCase();
   const limit = params.limit ?? 50;
+  const wantCreature =
+    params.cr != null ||
+    params.cr_min != null ||
+    params.cr_max != null ||
+    params.creature_type != null ||
+    params.size != null;
   const entries: Record<string, unknown>[] = [];
-  for (const raw of index.contents) {
-    if (entries.length >= limit) break;
-    const name = typeof raw.name === "string" ? raw.name : "";
-    if (needle && !name.toLowerCase().includes(needle)) continue;
-    if (params.type && raw.type !== params.type) continue;
-    entries.push({
-      _id: raw._id,
-      name: raw.name,
-      type: raw.type,
-      uuid: raw.uuid,
-      img: raw.img,
-    });
+
+  const matchesCreature = (raw: Record<string, unknown>): boolean => {
+    const crRaw = pick(raw, "system.details.cr");
+    const cr = typeof crRaw === "number" ? crRaw : Number(crRaw);
+    const hasCr = Number.isFinite(cr);
+    if (params.cr != null && (!hasCr || cr !== params.cr)) return false;
+    if (params.cr_min != null && (!hasCr || cr < params.cr_min)) return false;
+    if (params.cr_max != null && (!hasCr || cr > params.cr_max)) return false;
+    if (params.creature_type != null && pick(raw, "system.details.type.value") !== params.creature_type) return false;
+    if (params.size != null && pick(raw, "system.traits.size") !== params.size) return false;
+    return true;
+  };
+
+  const scan = async (pack: FoundryPack): Promise<void> => {
+    const index = await pack.getIndex(wantCreature ? { fields: CREATURE_FIELDS } : undefined);
+    for (const raw of index.contents) {
+      if (entries.length >= limit) return;
+      const name = typeof raw.name === "string" ? raw.name : "";
+      if (needle && !name.toLowerCase().includes(needle)) continue;
+      if (params.type && raw.type !== params.type) continue;
+      if (wantCreature && !matchesCreature(raw)) continue;
+      const out: Record<string, unknown> = {
+        _id: raw._id,
+        name: raw.name,
+        type: raw.type,
+        uuid: raw.uuid,
+        img: raw.img,
+        pack: pack.metadata?.id,
+      };
+      if (wantCreature) {
+        out.cr = pick(raw, "system.details.cr");
+        out.creature_type = pick(raw, "system.details.type.value");
+        out.size = pick(raw, "system.traits.size");
+      }
+      entries.push(out);
+    }
+  };
+
+  if (params.pack) {
+    await scan(getPack(params.pack));
+  } else {
+    for (const pack of allPacks()) {
+      if (entries.length >= limit) break;
+      if (params.document_type && pack.documentName !== params.document_type) continue;
+      // Creature filters only apply to Actor packs — skip the rest to avoid a
+      // wasted enriched-index load.
+      if (wantCreature && pack.documentName !== "Actor") continue;
+      await scan(pack);
+    }
   }
-  return { pack: params.pack, count: entries.length, entries };
+  return { pack: params.pack ?? null, count: entries.length, entries };
+}
+
+export async function handleCompendiumGetEntry(
+  params: ParamsFor<typeof Method.COMPENDIUM_GET_ENTRY>,
+): Promise<{ pack: string | null; entry: Record<string, unknown> }> {
+  let entry: Record<string, unknown>;
+  let packId: string | null = params.pack ?? null;
+  if (params.uuid) {
+    const doc = await fromUuid(params.uuid);
+    if (doc === undefined || doc === null) {
+      throw new BridgeError(ErrorCode.NOT_FOUND, `Nothing resolved for uuid '${params.uuid}'`);
+    }
+    entry = docToObject(doc);
+    // Compendium UUID: Compendium.<package>.<pack>.<Type>.<id> → pack id is
+    // "<package>.<pack>".
+    const parts = params.uuid.split(".");
+    if (parts[0] === "Compendium" && parts.length >= 3) packId = `${parts[1]}.${parts[2]}`;
+  } else {
+    const pack = getPack(params.pack as string);
+    entry = await resolveEntrySource(pack, params.entry as DocRef);
+  }
+  if (params.compact) entry = compactDoc(entry);
+  return { pack: packId, entry };
+}
+
+/** Strip long HTML/description text to save tokens, keeping stat fields. Stays
+ * system-agnostic: drops string values that are long or whose key looks like a
+ * description/biography, one level into `system` and into each item's system. */
+function compactDoc(obj: Record<string, unknown>): Record<string, unknown> {
+  const LONG = 400;
+  const PROSE_KEY = /description|biography|gmnotes/i;
+  const compactSystem = (system: unknown): unknown => {
+    if (!system || typeof system !== "object") return system;
+    const walk = (node: unknown): unknown => {
+      if (!node || typeof node !== "object" || Array.isArray(node)) return node;
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        // Drop prose-named keys entirely (string or {value,...} wrapper) and any
+        // long free-text string, keeping numeric/stat fields.
+        if (PROSE_KEY.test(k)) continue;
+        if (typeof v === "string" && v.length > LONG) continue;
+        out[k] = v && typeof v === "object" && !Array.isArray(v) ? walk(v) : v;
+      }
+      return out;
+    };
+    return walk(system);
+  };
+  const clone: Record<string, unknown> = { ...obj };
+  if (clone.system) clone.system = compactSystem(clone.system);
+  if (Array.isArray(clone.items)) {
+    clone.items = (clone.items as Record<string, unknown>[]).map((it) =>
+      it && typeof it === "object" && "system" in it ? { ...it, system: compactSystem(it.system) } : it,
+    );
+  }
+  return clone;
 }
 
 export async function handleCompendiumImport(
@@ -143,21 +275,9 @@ export async function handleCompendiumImport(
     }
   }
 
-  const index = await pack.getIndex();
   const sources: Record<string, unknown>[] = [];
   for (const ref of params.entries) {
-    const wantId = ref._id ?? ref.id;
-    const entry = index.contents.find((e) =>
-      wantId ? e._id === wantId : e.name === ref.name,
-    );
-    if (!entry) {
-      throw new BridgeError(
-        ErrorCode.NOT_FOUND,
-        `Pack entry not found by ref ${JSON.stringify(ref)}`,
-      );
-    }
-    const doc = await pack.getDocument(entry._id as string);
-    const source = docToObject(doc);
+    const source = await resolveEntrySource(pack, ref);
     delete source._id;
     if (folderId !== null) source.folder = folderId;
     sources.push(source);

@@ -627,3 +627,133 @@ export async function handleDnd5eItemRoll(
   const result = await invokeHeadless(fn.bind(item));
   return { actor: actor.id, item: item.id ?? item._id, kind: params.kind, total: rollTotal(result) ?? null };
 }
+
+// --- Encounter budgeting (2014 DMG math) ---------------------------------
+// XP by integer CR (index === CR); fractional CRs handled by crToXp. Matches
+// dnd5e CONFIG.DND5E.CR_EXP_LEVELS.
+const CR_EXP_LEVELS = [
+  10, 200, 450, 700, 1100, 1800, 2300, 2900, 3900, 5000, 5900, 7200, 8400, 10000,
+  11500, 13000, 15000, 18000, 20000, 22000, 25000, 33000, 41000, 50000, 62000, 75000,
+  90000, 105000, 120000, 135000, 155000,
+];
+
+function crToXp(cr: number): number {
+  if (cr < 1) return Math.max(200 * cr, 10);
+  // CR_EXP_LEVELS is integer-indexed; round a homebrew fractional CR>=1 to the
+  // nearest integer rather than indexing with a fraction (→ undefined → 155000).
+  const i = Math.min(Math.round(cr), 30);
+  return CR_EXP_LEVELS[i] ?? 155000;
+}
+
+// [easy, medium, hard, deadly] XP thresholds per character level, index 0 = L1.
+const DMG_THRESHOLDS_2014: [number, number, number, number][] = [
+  [25, 50, 75, 100], [50, 100, 150, 200], [75, 150, 225, 400], [125, 250, 375, 500],
+  [250, 500, 750, 1100], [300, 600, 900, 1400], [350, 750, 1100, 1700], [450, 900, 1400, 2100],
+  [550, 1100, 1600, 2400], [600, 1200, 1900, 2800], [800, 1600, 2400, 3600], [1000, 2000, 3000, 4500],
+  [1100, 2200, 3400, 5100], [1250, 2500, 3800, 5700], [1400, 2800, 4300, 6400], [1600, 3200, 4800, 7200],
+  [2000, 3900, 5900, 8800], [2100, 4200, 6300, 9500], [2400, 4900, 7300, 10900], [2800, 5700, 8500, 12700],
+];
+
+// Encounter multiplier tiers (party of 3-5 baseline). A small party (<3) shifts
+// one tier harder, a large one (>=6) one tier softer.
+const MULT_TIERS = [1, 1.5, 2, 2.5, 3, 4];
+function multiplierTier(monsterCount: number): number {
+  if (monsterCount <= 1) return 0;
+  if (monsterCount === 2) return 1;
+  if (monsterCount <= 6) return 2;
+  if (monsterCount <= 10) return 3;
+  if (monsterCount <= 14) return 4;
+  return 5;
+}
+
+/** Read a dotted path from a pack index entry (flat- or nested-keyed). */
+function pickPath(raw: Record<string, unknown>, dotPath: string): unknown {
+  if (dotPath in raw) return raw[dotPath];
+  let cur: unknown = raw;
+  for (const seg of dotPath.split(".")) {
+    if (cur === null || typeof cur !== "object") return undefined;
+    cur = (cur as Record<string, unknown>)[seg];
+  }
+  return cur;
+}
+
+async function lookupPackCr(packId: string, ref: DocRef): Promise<number> {
+  const packs = game.packs as { get(id: string): unknown } | undefined;
+  const pack = packs?.get(packId) as
+    | { getIndex(o?: { fields?: string[] }): Promise<{ contents: Record<string, unknown>[] }> }
+    | undefined;
+  if (!pack) throw new BridgeError(ErrorCode.NOT_FOUND, `Compendium pack '${packId}' not found`);
+  const index = await pack.getIndex({ fields: ["system.details.cr"] });
+  const wantId = ref._id ?? ref.id;
+  const entry = index.contents.find((e) => (wantId ? e._id === wantId : e.name === ref.name));
+  if (!entry) throw new BridgeError(ErrorCode.NOT_FOUND, `Pack entry not found by ref ${JSON.stringify(ref)}`);
+  const crRaw = pickPath(entry, "system.details.cr");
+  const cr = typeof crRaw === "number" ? crRaw : Number(crRaw);
+  if (!Number.isFinite(cr)) {
+    throw new BridgeError(ErrorCode.UNAVAILABLE, `Pack entry ${JSON.stringify(ref)} has no readable CR`);
+  }
+  return cr;
+}
+
+export async function handleDnd5eEncounterBudget(
+  params: ParamsFor<typeof Method.DND5E_ENCOUNTER_BUDGET>,
+): Promise<Record<string, unknown>> {
+  assertDnd5e();
+
+  // Party levels: explicit list plus any resolved from actors/group.
+  const levels: number[] = [...(params.levels ?? [])];
+  if ((params.actors && params.actors.length) || params.group) {
+    for (const a of resolveActorList({ actors: params.actors, group: params.group })) {
+      const lvl = Number(sysPath(a, "details.level"));
+      if (Number.isFinite(lvl) && lvl >= 1) levels.push(Math.min(20, Math.max(1, Math.round(lvl))));
+    }
+  }
+  if (!levels.length) {
+    throw new BridgeError(ErrorCode.BAD_REQUEST, "No party levels resolved (provide levels, actors, or group)");
+  }
+
+  const thresholds = { easy: 0, medium: 0, hard: 0, deadly: 0 };
+  for (const lvl of levels) {
+    const [e, m, h, d] = DMG_THRESHOLDS_2014[Math.min(20, Math.max(1, lvl)) - 1];
+    thresholds.easy += e;
+    thresholds.medium += m;
+    thresholds.hard += h;
+    thresholds.deadly += d;
+  }
+
+  let rawXp = 0;
+  let monsterCount = 0;
+  for (const m of params.monsters) {
+    const count = m.count ?? 1;
+    let cr = m.cr ?? undefined;
+    if (cr == null && m.pack && m.entry) cr = await lookupPackCr(m.pack, m.entry);
+    if (cr == null) {
+      throw new BridgeError(ErrorCode.BAD_REQUEST, "Each monster needs `cr` or `pack` + `entry`");
+    }
+    rawXp += crToXp(cr) * count;
+    monsterCount += count;
+  }
+
+  const partySize = params.party_size ?? levels.length;
+  let tier = multiplierTier(monsterCount);
+  if (partySize < 3) tier += 1;
+  else if (partySize >= 6) tier -= 1;
+  tier = Math.min(MULT_TIERS.length - 1, Math.max(0, tier));
+  let multiplier = MULT_TIERS[tier];
+  // DMG: a party of 6+ facing a single monster uses x0.5 (below the table).
+  if (partySize >= 6 && monsterCount <= 1) multiplier = 0.5;
+  const adjustedXp = Math.round(rawXp * multiplier);
+
+  let difficulty = "trivial";
+  if (adjustedXp >= thresholds.deadly) difficulty = "deadly";
+  else if (adjustedXp >= thresholds.hard) difficulty = "hard";
+  else if (adjustedXp >= thresholds.medium) difficulty = "medium";
+  else if (adjustedXp >= thresholds.easy) difficulty = "easy";
+
+  return {
+    party: { size: partySize, levels, thresholds },
+    monsters: { count: monsterCount, rawXp, multiplier, adjustedXp },
+    difficulty,
+    rules: "2014 DMG",
+  };
+}

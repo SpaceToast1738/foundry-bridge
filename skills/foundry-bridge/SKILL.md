@@ -69,9 +69,14 @@ writing it and match its registered type; confirm before flipping unfamiliar `co
 
 ## Reusing existing content
 Need a monster, spell, item, or premade content? Browse packs with `list_compendiums` /
-`search_compendium` and pull copies in with `import_from_compendium` (optionally into a folder) rather
-than hand-building from scratch. Then inspect/modify the world copy. To save world content back into a
-pack (backups/authoring), use `export_to_compendium` (the pack must be unlocked).
+`search_compendium` (omit `pack` to search **all** packs at once — narrow with `document_type`; on a 5e
+world filter monsters by `cr`/`cr_min`/`cr_max`/`creature_type`/`size`). Read a full stat block/spell
+**without importing** via `get_compendium_entry` (by `uuid` or `pack`+`entry`; pass `compact` to drop long
+descriptions and save tokens). Pull copies into the world with `import_from_compendium` (optionally into a
+folder) rather than hand-building from scratch, then inspect/modify the world copy. To save world content
+back into a pack (backups/authoring), use `export_to_compendium` (the pack must be unlocked). To size a
+fight, `dnd5e_encounter_budget` (party levels/actors + monsters by CR or compendium ref → easy/medium/
+hard/deadly bands, 2014 DMG).
 
 ## Filing / organising recipe
 1. `get_folders` (e.g. `requested_fields: ["name","type","folder"]`) to see the current taxonomy.

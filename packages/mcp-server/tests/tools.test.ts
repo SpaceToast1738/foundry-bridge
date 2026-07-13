@@ -87,6 +87,18 @@ describe("buildToolDefinitions", () => {
     );
   });
 
+  it("exposes the Batch 4 compendium-depth tools", () => {
+    const tools = buildToolDefinitions() as {
+      name: string;
+      inputSchema: { required?: string[] };
+    }[];
+    const names = tools.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["get_compendium_entry", "dnd5e_encounter_budget"]));
+    // search_compendium's pack is now optional (cross-pack search).
+    const search = tools.find((t) => t.name === "search_compendium");
+    expect(search?.inputSchema.required).not.toContain("pack");
+  });
+
   it("advance_combat exposes the round actions in its enum", () => {
     const tools = buildToolDefinitions() as {
       name: string;
@@ -252,6 +264,16 @@ describe("dispatchTool", () => {
       Method.PLAYLIST_STOP_SOUND,
       Method.PLAYLIST_PAUSE,
       Method.PLAYLIST_RESUME,
+    ]);
+  });
+
+  it("routes the Batch 4 compendium tools to their methods", async () => {
+    const { relay, calls } = makeRelay();
+    await dispatchTool("get_compendium_entry", { uuid: "Compendium.dnd5e.monsters.Actor.x" }, ctxWith(relay));
+    await dispatchTool("dnd5e_encounter_budget", { levels: [5], monsters: [{ cr: 2 }] }, ctxWith(relay));
+    expect(calls.map((c) => c.method)).toEqual([
+      Method.COMPENDIUM_GET_ENTRY,
+      Method.DND5E_ENCOUNTER_BUDGET,
     ]);
   });
 });

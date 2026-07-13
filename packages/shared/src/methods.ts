@@ -20,6 +20,7 @@ export const Method = {
   COMPENDIUM_EXPORT: "compendium.export",
   COMPENDIUM_CREATE: "compendium.create",
   COMPENDIUM_DELETE: "compendium.delete",
+  COMPENDIUM_GET_ENTRY: "compendium.get_entry",
   FOLDERS_CREATE: "folders.create",
   FOLDERS_MOVE: "folders.move",
   MESSAGES_CREATE: "messages.create",
@@ -48,6 +49,7 @@ export const Method = {
   DND5E_ROLL: "dnd5e.roll",
   DND5E_REST: "dnd5e.rest",
   DND5E_ACTOR_SUMMARY: "dnd5e.actor_summary",
+  DND5E_ENCOUNTER_BUDGET: "dnd5e.encounter_budget",
   TABLE_CREATE: "table.create",
   TABLE_ADD_RESULTS: "table.add_results",
   PLAYLIST_PLAY: "playlist.play",
@@ -125,6 +127,7 @@ export const methodSchema = z.enum([
   Method.COMPENDIUM_EXPORT,
   Method.COMPENDIUM_CREATE,
   Method.COMPENDIUM_DELETE,
+  Method.COMPENDIUM_GET_ENTRY,
   Method.FOLDERS_CREATE,
   Method.FOLDERS_MOVE,
   Method.MESSAGES_CREATE,
@@ -153,6 +156,7 @@ export const methodSchema = z.enum([
   Method.DND5E_ROLL,
   Method.DND5E_REST,
   Method.DND5E_ACTOR_SUMMARY,
+  Method.DND5E_ENCOUNTER_BUDGET,
   Method.TABLE_CREATE,
   Method.TABLE_ADD_RESULTS,
   Method.PLAYLIST_PLAY,
@@ -232,6 +236,7 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.EMBEDDED_UPDATE]: PermissionTier.WRITE,
   [Method.COMPENDIUM_LIST]: PermissionTier.READ,
   [Method.COMPENDIUM_SEARCH]: PermissionTier.READ,
+  [Method.COMPENDIUM_GET_ENTRY]: PermissionTier.READ,
   [Method.COMPENDIUM_IMPORT]: PermissionTier.WRITE,
   [Method.COMPENDIUM_EXPORT]: PermissionTier.WRITE,
   [Method.COMPENDIUM_CREATE]: PermissionTier.WRITE,
@@ -261,6 +266,7 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.DND5E_ROLL]: PermissionTier.WRITE,
   [Method.DND5E_REST]: PermissionTier.WRITE,
   [Method.DND5E_ACTOR_SUMMARY]: PermissionTier.READ,
+  [Method.DND5E_ENCOUNTER_BUDGET]: PermissionTier.READ,
   [Method.TABLE_CREATE]: PermissionTier.WRITE,
   [Method.TABLE_ADD_RESULTS]: PermissionTier.WRITE,
   [Method.PLAYLIST_PLAY]: PermissionTier.WRITE,
@@ -414,9 +420,19 @@ export const paramSchemas = {
     .object({ type: z.string().min(1).optional() })
     .optional(),
   [Method.COMPENDIUM_SEARCH]: z.object({
-    pack: z.string().min(1),
+    // Omit to search ALL packs (optionally narrowed by document_type).
+    pack: z.string().min(1).optional(),
     query: z.string().optional(),
+    // Filter entries by their document subtype (e.g. "npc", "weapon").
     type: z.string().min(1).optional(),
+    // Only scan packs of this document type (e.g. "Actor", "Item").
+    document_type: z.string().min(1).optional(),
+    // dnd5e creature filters (force a heavier index load; Actor packs only).
+    cr: z.number().optional(),
+    cr_min: z.number().optional(),
+    cr_max: z.number().optional(),
+    creature_type: z.string().min(1).optional(),
+    size: z.string().min(1).optional(),
     limit: z.number().int().positive().optional(),
   }),
   [Method.COMPENDIUM_IMPORT]: z.object({
@@ -436,6 +452,18 @@ export const paramSchemas = {
   [Method.COMPENDIUM_DELETE]: z.object({
     pack: z.string().min(1),
   }),
+  [Method.COMPENDIUM_GET_ENTRY]: z
+    .object({
+      pack: z.string().min(1).optional(),
+      entry: docRefSchema.optional(),
+      // A full Compendium UUID, e.g. Compendium.dnd5e.monsters.Actor.<id>.
+      uuid: z.string().min(1).optional(),
+      // Drop long HTML descriptions/biography to save tokens.
+      compact: z.boolean().optional(),
+    })
+    .refine((p) => p.uuid || (p.pack && p.entry), {
+      message: "Provide `uuid`, or `pack` + `entry`",
+    }),
   [Method.FOLDERS_CREATE]: z.object({
     type: z.string().min(1),
     name: z.string().min(1),
@@ -598,6 +626,36 @@ export const paramSchemas = {
       message: "Provide `actor`, `actors`, or `group`",
     }),
   [Method.DND5E_ACTOR_SUMMARY]: z.object({ actor: docRefSchema }),
+  [Method.DND5E_ENCOUNTER_BUDGET]: z
+    .object({
+      // Party levels — provide directly, and/or via actors[]/group (levels read
+      // from each PC's system.details.level).
+      levels: z.array(z.number().int().min(1).max(20)).optional(),
+      actors: z.array(docRefSchema).optional(),
+      group: docRefSchema.optional(),
+      // The monsters — each by CR, or by a compendium ref (CR read from the
+      // index), with an optional count.
+      monsters: z
+        .array(
+          z
+            .object({
+              cr: z.number().optional(),
+              pack: z.string().min(1).optional(),
+              entry: docRefSchema.optional(),
+              count: z.number().int().positive().optional(),
+            })
+            .refine((m) => m.cr != null || (m.pack && m.entry), {
+              message: "Each monster needs `cr` or `pack` + `entry`",
+            }),
+        )
+        .min(1),
+      // Overrides the party size used for the encounter multiplier column shift
+      // (<3 harder, >=6 softer). Defaults to the number of party levels.
+      party_size: z.number().int().positive().optional(),
+    })
+    .refine((p) => (p.levels && p.levels.length) || (p.actors && p.actors.length) || p.group, {
+      message: "Provide `levels`, `actors`, or `group`",
+    }),
   [Method.TABLE_CREATE]: z.object({
     name: z.string().min(1),
     folder: z.string().min(1).optional(),

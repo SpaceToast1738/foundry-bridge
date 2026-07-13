@@ -626,17 +626,40 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "search_compendium",
     description:
-      "Search a compendium pack's index by name (substring, case-insensitive). Returns lightweight entries (_id, name, type, uuid, img). Use list_compendiums first to get a pack id.",
+      "Search compendium indexes by name (substring, case-insensitive). Returns lightweight entries (_id, name, type, uuid, img, and the source `pack`). Omit `pack` to search ALL packs (narrow with `document_type` to keep it fast). On a dnd5e world, the cr/cr_min/cr_max/creature_type/size filters pull those fields into the index (Actor packs) so you can find e.g. CR 3-5 dragons. Results are capped at `limit` across all packs.",
     inputSchema: {
       type: "object",
       properties: {
-        pack: { type: "string", description: "Pack id, e.g. \"dnd5e.monsters\"." },
-        query: { type: "string", description: "Name substring to match. Omit to list the pack." },
-        type: { type: "string", description: "Optional entry subtype filter." },
+        pack: { type: "string", description: "Pack id, e.g. \"dnd5e.monsters\". Omit to search ALL packs." },
+        query: { type: "string", description: "Name substring to match. Omit to list." },
+        type: { type: "string", description: "Filter entries by document subtype, e.g. \"npc\", \"weapon\"." },
+        document_type: { type: "string", description: "Only scan packs of this document type, e.g. Actor/Item." },
+        cr: { type: "number", description: "[dnd5e] Exact CR, e.g. 5 or 0.25." },
+        cr_min: { type: "number", description: "[dnd5e] Minimum CR." },
+        cr_max: { type: "number", description: "[dnd5e] Maximum CR." },
+        creature_type: { type: "string", description: "[dnd5e] e.g. dragon, humanoid (system.details.type.value)." },
+        size: { type: "string", description: "[dnd5e] tiny/sm/med/lg/huge/grg." },
         limit: { type: "integer", description: "Max entries to return. Default 50." },
       },
-      required: ["pack"],
+      required: [],
     },
+  });
+
+  tools.push({
+    name: "get_compendium_entry",
+    description:
+      "Fetch a FULL compendium document (e.g. a monster stat block or a spell) without importing it into the world. Reference it by `uuid` (e.g. Compendium.dnd5e.monsters.Actor.<id>) OR by `pack` + `entry` (_id/name, from search_compendium). Set `compact` to drop long HTML descriptions/biography and keep just the stats — much cheaper on tokens.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pack: { type: "string", description: "Pack id, e.g. \"dnd5e.monsters\" (with `entry`)." },
+        entry: docRefSchema,
+        uuid: { type: "string", description: "Full Compendium UUID, e.g. Compendium.dnd5e.monsters.Actor.<id>." },
+        compact: { type: "boolean", description: "Drop long descriptions/biography to save tokens." },
+      },
+      required: [],
+    },
+    _meta: HEAVY_READ_META,
   });
 
   tools.push({
@@ -1126,6 +1149,36 @@ export function buildToolDefinitions(): ToolDef[] {
       type: "object",
       properties: { actor: docRefSchema },
       required: ["actor"],
+    },
+  });
+
+  tools.push({
+    name: "dnd5e_encounter_budget",
+    description:
+      "[D&D 5e] Price an encounter using 2014 DMG math. Give the party as `levels` (and/or `actors`/`group` — levels read from each PC), and the `monsters` (each by `cr`, or a compendium `pack`+`entry` whose CR is read from the index, with an optional `count`). Returns the party's easy/medium/hard/deadly XP thresholds, the raw and count-adjusted monster XP, and the resulting difficulty band. Read-only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        levels: { type: "array", items: { type: "integer", minimum: 1, maximum: 20 }, description: "Party character levels." },
+        actors: { type: "array", items: docRefSchema, description: "Party actors (levels read from each)." },
+        group: { ...docRefSchema, description: "A dnd5e Group actor whose members are the party." },
+        monsters: {
+          type: "array",
+          description: "The monsters. Each: { cr } OR { pack, entry }, with optional count.",
+          items: {
+            type: "object",
+            properties: {
+              cr: { type: "number", description: "Challenge rating, e.g. 5 or 0.25." },
+              pack: { type: "string", description: "Compendium pack id (with entry)." },
+              entry: docRefSchema,
+              count: { type: "integer", minimum: 1, description: "How many (default 1)." },
+            },
+            required: [],
+          },
+        },
+        party_size: { type: "integer", minimum: 1, description: "Override the party size for the multiplier column shift (<3 harder, >=6 softer)." },
+      },
+      required: ["monsters"],
     },
   });
 
@@ -1752,6 +1805,8 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMPENDIUM_LIST, params);
     case "search_compendium":
       return ctx.relay.call(Method.COMPENDIUM_SEARCH, params);
+    case "get_compendium_entry":
+      return ctx.relay.call(Method.COMPENDIUM_GET_ENTRY, params);
     case "import_from_compendium":
       return ctx.relay.call(Method.COMPENDIUM_IMPORT, params);
     case "export_to_compendium":
@@ -1801,6 +1856,8 @@ export async function dispatchTool(
       return ctx.relay.call(Method.DND5E_REST, params);
     case "dnd5e_actor_summary":
       return ctx.relay.call(Method.DND5E_ACTOR_SUMMARY, params);
+    case "dnd5e_encounter_budget":
+      return ctx.relay.call(Method.DND5E_ENCOUNTER_BUDGET, params);
     case "dnd5e_spell_slots":
       return ctx.relay.call(Method.DND5E_SPELL_SLOTS, params);
     case "dnd5e_currency":
