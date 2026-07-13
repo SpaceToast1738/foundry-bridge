@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@foundry-bridge/shared": "0.1.0",
-    "zod": "^3.23.8"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
