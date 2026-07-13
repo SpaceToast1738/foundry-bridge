@@ -47,6 +47,15 @@ describe("config handlers (modules + settings)", () => {
           default: "555",
           choices: { "555": "Standard", "5105": "Variant" },
         },
+        {
+          namespace: "core",
+          key: "permissions",
+          name: "Permission Configuration",
+          scope: "world",
+          config: false,
+          type: Object,
+          default: {},
+        },
       ],
     });
   });
@@ -89,7 +98,7 @@ describe("config handlers (modules + settings)", () => {
 
   it("lists registered settings, optionally filtered by namespace", () => {
     const all = handleSettingsList(undefined) as { count: number };
-    expect(all.count).toBe(2);
+    expect(all.count).toBe(3);
     const dnd = handleSettingsList({ namespace: "dnd5e" }) as {
       settings: Array<Record<string, unknown>>;
     };
@@ -106,7 +115,8 @@ describe("config handlers (modules + settings)", () => {
     const res = handleSettingsList({ namespace: "core", include_values: true }) as {
       settings: Array<Record<string, unknown>>;
     };
-    expect(res.settings[0]).toMatchObject({ namespace: "core", key: "time", value: true });
+    const time = res.settings.find((s) => s.key === "time");
+    expect(time).toMatchObject({ namespace: "core", key: "time", value: true });
   });
 
   it("gets a single setting value", () => {
@@ -140,5 +150,60 @@ describe("config handlers (modules + settings)", () => {
     await expect(
       handleSettingSet({ namespace: "core", key: "ghost", value: 1 }),
     ).rejects.toThrow(/not registered/);
+  });
+
+  it("stores an object value for an Object setting as an object", async () => {
+    await handleSettingSet({
+      namespace: "core",
+      key: "permissions",
+      value: { ACTOR_CREATE: [1, 2, 3, 4] },
+    });
+    const got = handleSettingGet({ namespace: "core", key: "permissions" }) as {
+      value: unknown;
+    };
+    expect(got.value).toEqual({ ACTOR_CREATE: [1, 2, 3, 4] });
+    expect(typeof got.value).toBe("object");
+  });
+
+  it("parses a JSON string into an object for an Object setting (the core.permissions corruption)", async () => {
+    // A caller mistakenly passes the object as a JSON string. Without coercion
+    // Foundry double-encodes it and reading it back yields a string, which
+    // crashes World.setup. We must store a real object instead.
+    await handleSettingSet({
+      namespace: "core",
+      key: "permissions",
+      value: '{"ACTOR_CREATE":[1,2,3,4]}',
+    });
+    const got = handleSettingGet({ namespace: "core", key: "permissions" }) as {
+      value: unknown;
+    };
+    expect(typeof got.value).toBe("object");
+    expect(got.value).toEqual({ ACTOR_CREATE: [1, 2, 3, 4] });
+  });
+
+  it("rejects a non-JSON string for an Object setting with BAD_REQUEST", async () => {
+    await expect(
+      handleSettingSet({ namespace: "core", key: "permissions", value: "not json" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("rejects a type mismatch (array for an object setting)", async () => {
+    await expect(
+      handleSettingSet({ namespace: "core", key: "permissions", value: [1, 2, 3] }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("coerces a stringified boolean for a Boolean setting", async () => {
+    await handleSettingSet({ namespace: "core", key: "time", value: "false" });
+    const got = handleSettingGet({ namespace: "core", key: "time" }) as {
+      value: unknown;
+    };
+    expect(got.value).toBe(false);
+  });
+
+  it("rejects a non-string for a String setting", async () => {
+    await expect(
+      handleSettingSet({ namespace: "dnd5e", key: "diagonalMovement", value: 5105 }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

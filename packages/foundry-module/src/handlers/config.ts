@@ -158,6 +158,73 @@ function assertRegistered(settings: FoundrySettings, fullKey: string): void {
   }
 }
 
+/**
+ * Coerce/validate a setting value against its registered type before writing.
+ *
+ * Foundry serialises setting values to JSON in the database. If a caller passes
+ * a *string* for an Object/Array/Number/Boolean setting (a common mistake — e.g.
+ * a JSON string of an object), Foundry stores the double-encoded string; on read
+ * it parses back to a string, and code like `Setting.getPermissions` that does
+ * `"KEY" in value` throws a TypeError — which can crash world startup (this
+ * happened to `core.permissions`). We parse an obvious JSON string back to its
+ * value and reject genuine type mismatches with a clear BAD_REQUEST instead of
+ * silently corrupting the setting.
+ */
+function coerceSettingValue(
+  value: unknown,
+  typeCtor: unknown,
+  fullKey: string,
+): unknown {
+  const name = typeName(typeCtor);
+  switch (name) {
+    case "String":
+      if (typeof value !== "string") {
+        throw new BridgeError(
+          ErrorCode.BAD_REQUEST,
+          `Setting '${fullKey}' expects a string, got ${typeof value}`,
+        );
+      }
+      return value;
+    case "Number":
+    case "Boolean":
+    case "Object":
+    case "Array": {
+      let v = value;
+      // Forgive the common "stringified value" mistake by parsing it back.
+      if (typeof v === "string") {
+        try {
+          v = JSON.parse(v);
+        } catch {
+          throw new BridgeError(
+            ErrorCode.BAD_REQUEST,
+            `Setting '${fullKey}' expects ${name}, but received a string that isn't valid JSON`,
+          );
+        }
+      }
+      const ok =
+        name === "Number"
+          ? typeof v === "number"
+          : name === "Boolean"
+            ? typeof v === "boolean"
+            : name === "Array"
+              ? Array.isArray(v)
+              : v !== null && typeof v === "object" && !Array.isArray(v);
+      if (!ok) {
+        throw new BridgeError(
+          ErrorCode.BAD_REQUEST,
+          `Setting '${fullKey}' expects ${name.toLowerCase()}, got ${
+            Array.isArray(v) ? "array" : v === null ? "null" : typeof v
+          }`,
+        );
+      }
+      return v;
+    }
+    default:
+      // Unknown / custom (DataModel) type — don't interfere.
+      return value;
+  }
+}
+
 export function handleSettingGet(
   params: ParamsFor<typeof Method.SETTING_GET>,
 ): Record<string, unknown> {
@@ -182,9 +249,18 @@ export async function handleSettingSet(
   const settings = getSettings();
   const fullKey = `${params.namespace}.${params.key}`;
   assertRegistered(settings, fullKey);
+
+  // Validate against the registered type so a wrong-typed value (e.g. a JSON
+  // string for an object setting) can't silently corrupt the setting.
+  const reg = registry(settings);
+  const def = reg?.get(fullKey);
+  const value = def
+    ? coerceSettingValue(params.value, def.type, fullKey)
+    : params.value;
+
   let stored: unknown;
   try {
-    stored = await settings.set(params.namespace, params.key, params.value);
+    stored = await settings.set(params.namespace, params.key, value);
   } catch (err) {
     throw new BridgeError(
       ErrorCode.BAD_REQUEST,
@@ -194,6 +270,6 @@ export async function handleSettingSet(
   return {
     namespace: params.namespace,
     key: params.key,
-    value: stored ?? params.value,
+    value: stored ?? value,
   };
 }
