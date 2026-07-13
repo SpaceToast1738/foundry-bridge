@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import WebSocket from "ws";
 import { ErrorCode, Method, decodeRequest } from "@foundry-bridge/shared";
 import { Relay } from "../src/relay";
@@ -54,6 +57,35 @@ describe("Relay", () => {
     const result = await relay.call(Method.PING, {});
     expect(result).toEqual({ echoed: Method.PING });
     module.close();
+  });
+
+  it("appends a JSONL audit line per settled call, with doc ids", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fb-audit-"));
+    relay = new Relay({ port: 0, auditDir: dir });
+    await relay.start();
+    const module = await connectModule(relay.getPort());
+    module.on("message", (raw) => {
+      const req = decodeRequest(raw.toString());
+      module.send(JSON.stringify({ id: req.id, ok: true, result: {} }));
+    });
+
+    await relay.call(Method.DOCUMENTS_GET, {
+      collection: "actors",
+      ref: { _id: "abc123" },
+    });
+
+    const day = new Date().toISOString().slice(0, 10);
+    const lines = fs
+      .readFileSync(path.join(dir, `${day}.jsonl`), "utf-8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    const entry = lines.find((l) => l.method === Method.DOCUMENTS_GET);
+    expect(entry).toMatchObject({ method: Method.DOCUMENTS_GET, ok: true });
+    expect(entry.docIds).toContain("abc123");
+    expect(typeof entry.ms).toBe("number");
+    module.close();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it("propagates an error response as a BridgeError", async () => {

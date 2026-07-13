@@ -18,6 +18,7 @@ import {
 } from "./core/credentials.js";
 import { resolveRuntimeConfig } from "./core/config.js";
 import { Relay } from "./relay.js";
+import { SessionStore } from "./session-store.js";
 import { buildToolDefinitions, dispatchTool, type ToolContext } from "./tools.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -137,6 +138,7 @@ function createServer(context: ToolContext, instructions: string): Server {
 interface Session {
   server: Server;
   transport: StreamableHTTPServerTransport;
+  lastSeen: number;
 }
 
 async function main(): Promise<void> {
@@ -154,6 +156,7 @@ async function main(): Promise<void> {
     port: config.relayPort,
     host: config.relayHost,
     requestTimeoutMs: config.requestTimeoutMs,
+    auditDir: config.auditDir,
     logger,
   });
   await relay.start();
@@ -200,14 +203,23 @@ async function main(): Promise<void> {
     return;
   }
 
-  const sessions = new Map<string, Session>();
+  const sessions = new SessionStore<Session>(
+    config.sessionTtlMs,
+    config.maxSessions,
+    (s) => void s.transport.close().catch(() => undefined),
+  );
 
   async function createSession(): Promise<Session> {
     const server = createServer(context, instructions);
+    const session: Session = {
+      server,
+      transport: undefined as unknown as StreamableHTTPServerTransport,
+      lastSeen: Date.now(),
+    };
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => {
-        sessions.set(id, { server, transport });
+        sessions.add(id, session);
         console.error(`[foundry-bridge] session ${id} initialized`);
       },
       onsessionclosed: (id) => {
@@ -215,21 +227,39 @@ async function main(): Promise<void> {
         console.error(`[foundry-bridge] session ${id} closed`);
       },
     });
-    transport.onclose = () => {
-      if (transport.sessionId) sessions.delete(transport.sessionId);
-    };
+    session.transport = transport;
+    transport.onclose = () => sessions.delete(transport.sessionId);
     await server.connect(transport);
-    return { server, transport };
+    return session;
   }
+
+  // Sweep idle sessions so the in-memory map can't grow without bound.
+  const sweep = setInterval(() => {
+    for (const id of sessions.sweep()) {
+      console.error(`[foundry-bridge] session ${id} swept (idle)`);
+    }
+  }, 60_000);
+  sweep.unref?.();
 
   const app = express();
   app.use(express.json({ limit: "16mb" }));
 
   const handleMcp = async (req: Request, res: Response) => {
-    const sessionId = req.header("mcp-session-id");
-    let session: Session | undefined;
-    if (sessionId) session = sessions.get(sessionId);
-    if (!session) session = await createSession();
+    const look = sessions.lookup(req.header("mcp-session-id"));
+    if (look.action === "not_found") {
+      // Unknown/expired session (e.g. after a gateway restart). Per the MCP
+      // spec, answer 404 so the client transparently re-initializes instead
+      // of getting wedged in a "Server not initialized" 400 loop.
+      res.status(404).json({
+        jsonrpc: "2.0",
+        error: { code: -32001, message: "Session not found" },
+        id: null,
+      });
+      return;
+    }
+    // No session id → this is an initialize handshake; create a fresh session.
+    const session =
+      look.action === "use" ? look.session : await createSession();
     try {
       await session.transport.handleRequest(req, res, req.body);
     } catch (err) {
@@ -262,15 +292,9 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string) => {
     console.error(`[foundry-bridge] received ${signal}, shutting down`);
+    clearInterval(sweep);
     httpServer.close();
-    for (const session of sessions.values()) {
-      try {
-        await session.transport.close();
-      } catch {
-        /* ignore */
-      }
-    }
-    sessions.clear();
+    sessions.closeAll();
     try {
       await relay.stop();
     } catch (err) {

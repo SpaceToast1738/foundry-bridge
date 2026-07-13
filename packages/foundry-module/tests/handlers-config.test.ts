@@ -152,6 +152,16 @@ describe("config handlers (modules + settings)", () => {
     ).rejects.toThrow(/not registered/);
   });
 
+  it("FORBIDDEN when writing the bridge's own settings (escalation guard)", async () => {
+    // A write-tier agent must not be able to flip destructiveEnabled / raise
+    // maxDeletePerCall / repoint serverUrl by writing foundry-bridge.* settings.
+    for (const key of ["destructiveEnabled", "maxDeletePerCall", "serverUrl"]) {
+      await expect(
+        handleSettingSet({ namespace: "foundry-bridge", key, value: true }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+  });
+
   it("stores an object value for an Object setting as an object", async () => {
     await handleSettingSet({
       namespace: "core",

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { WebSocketServer, type WebSocket, type RawData } from "ws";
 import {
   BridgeError,
@@ -13,6 +15,8 @@ export interface RelayOptions {
   port: number;
   host?: string;
   requestTimeoutMs?: number;
+  /** Directory for the durable JSONL audit log; undefined disables it. */
+  auditDir?: string;
   logger?: {
     log: (msg: string) => void;
     warn: (msg: string) => void;
@@ -28,12 +32,46 @@ const noopLogger = {
   error: () => undefined,
 };
 
+/** Cheap, non-sensitive digest of a call's params for the audit log. */
+interface CallDigest {
+  args?: string;
+  docIds?: string[];
+}
+
+function auditDigest(params: unknown): CallDigest {
+  if (!params || typeof params !== "object") return {};
+  const p = params as Record<string, unknown>;
+  const docIds: string[] = [];
+  const pushId = (v: unknown) => {
+    if (typeof v === "string") docIds.push(v);
+  };
+  pushId(p._id);
+  pushId(p.id);
+  if (Array.isArray(p.ids)) p.ids.forEach(pushId);
+  for (const k of ["ref", "entity", "actor", "combat", "scene", "playlist"]) {
+    const r = p[k];
+    if (r && typeof r === "object") {
+      pushId((r as Record<string, unknown>)._id);
+      pushId((r as Record<string, unknown>).id);
+    }
+  }
+  let args: string | undefined;
+  try {
+    args = JSON.stringify(p);
+    if (args.length > 300) args = `${args.slice(0, 300)}…`;
+  } catch {
+    /* non-serialisable — skip */
+  }
+  return { args, docIds: docIds.length ? docIds : undefined };
+}
+
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (err: BridgeError) => void;
   timer: NodeJS.Timeout;
   method: Method;
   startedAt: number;
+  digest: CallDigest;
 }
 
 export interface RelayStats {
@@ -67,12 +105,24 @@ export class Relay {
   private errorCount = 0;
   private lastError: RelayStats["lastError"] = null;
   private readonly activity: ActivityEntry[] = [];
+  // Durable audit trail (S5). Best-effort; disabled if the dir isn't writable.
+  private auditDir: string | undefined;
 
   constructor(opts: RelayOptions) {
     this.host = opts.host ?? "127.0.0.1";
     this.port = opts.port;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.logger = opts.logger ?? noopLogger;
+    if (opts.auditDir) {
+      try {
+        fs.mkdirSync(opts.auditDir, { recursive: true });
+        this.auditDir = opts.auditDir;
+      } catch (err) {
+        this.logger.warn(
+          `[relay] audit log disabled — cannot create ${opts.auditDir}: ${(err as Error).message}`,
+        );
+      }
+    }
   }
 
   start(): Promise<void> {
@@ -142,13 +192,38 @@ export class Relay {
     startedAt: number,
     ok: boolean,
     error?: { code: string; message: string },
+    digest?: CallDigest,
   ): void {
     const ts = Date.now();
-    this.activity.push({ method, ok, ms: ts - startedAt, ts });
+    const ms = ts - startedAt;
+    this.activity.push({ method, ok, ms, ts });
     if (this.activity.length > MAX_ACTIVITY) this.activity.shift();
     if (!ok) {
       this.errorCount += 1;
       if (error) this.lastError = { ...error, method, ts };
+    }
+    this.writeAudit({
+      ts,
+      method,
+      ok,
+      ms,
+      ...(error ? { err: error.code } : {}),
+      ...(digest?.docIds ? { docIds: digest.docIds } : {}),
+      ...(digest?.args ? { args: digest.args } : {}),
+    });
+  }
+
+  /** Append one JSONL line to the day's audit file. Never throws. */
+  private writeAudit(entry: Record<string, unknown>): void {
+    if (!this.auditDir) return;
+    try {
+      const day = new Date(entry.ts as number).toISOString().slice(0, 10);
+      fs.appendFileSync(
+        path.join(this.auditDir, `${day}.jsonl`),
+        `${JSON.stringify(entry)}\n`,
+      );
+    } catch {
+      // Best-effort — a failed audit write must never break a tool call.
     }
   }
 
@@ -174,15 +249,16 @@ export class Relay {
       }
       const id = randomUUID();
       const startedAt = Date.now();
+      const digest = auditDigest(params);
       this.totalCalls += 1;
       const timeoutMs = opts.timeoutMs ?? this.requestTimeoutMs;
       const timer = setTimeout(() => {
         this.pending.delete(id);
         const message = `Method '${method}' timed out after ${timeoutMs}ms`;
-        this.recordSettle(method, startedAt, false, { code: ErrorCode.TIMEOUT, message });
+        this.recordSettle(method, startedAt, false, { code: ErrorCode.TIMEOUT, message }, digest);
         reject(new BridgeError(ErrorCode.TIMEOUT, message));
       }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer, method, startedAt });
+      this.pending.set(id, { resolve, reject, timer, method, startedAt, digest });
       const req: Request = { id, method, params };
       try {
         socket.send(encode(req));
@@ -190,7 +266,7 @@ export class Relay {
         clearTimeout(timer);
         this.pending.delete(id);
         const message = `Failed to send request: ${(err as Error).message}`;
-        this.recordSettle(method, startedAt, false, { code: ErrorCode.INTERNAL, message });
+        this.recordSettle(method, startedAt, false, { code: ErrorCode.INTERNAL, message }, digest);
         reject(new BridgeError(ErrorCode.INTERNAL, message));
       }
     });
@@ -245,13 +321,16 @@ export class Relay {
     this.pending.delete(res.id);
     clearTimeout(pending.timer);
     if (res.ok) {
-      this.recordSettle(pending.method, pending.startedAt, true);
+      this.recordSettle(pending.method, pending.startedAt, true, undefined, pending.digest);
       pending.resolve(res.result);
     } else {
-      this.recordSettle(pending.method, pending.startedAt, false, {
-        code: res.error.code,
-        message: res.error.message,
-      });
+      this.recordSettle(
+        pending.method,
+        pending.startedAt,
+        false,
+        { code: res.error.code, message: res.error.message },
+        pending.digest,
+      );
       pending.reject(new BridgeError(res.error.code, res.error.message));
     }
   }
@@ -259,10 +338,13 @@ export class Relay {
   private rejectAllPending(err: BridgeError): void {
     for (const [, pending] of this.pending) {
       clearTimeout(pending.timer);
-      this.recordSettle(pending.method, pending.startedAt, false, {
-        code: err.code,
-        message: err.message,
-      });
+      this.recordSettle(
+        pending.method,
+        pending.startedAt,
+        false,
+        { code: err.code, message: err.message },
+        pending.digest,
+      );
       pending.reject(err);
     }
     this.pending.clear();

@@ -4,6 +4,7 @@ import {
   Method,
   type ParamsFor,
 } from "@foundry-bridge/shared";
+import { MODULE_ID } from "../constants.js";
 
 // ---------------------------------------------------------------------------
 // Modules (read-only)
@@ -246,6 +247,15 @@ export function handleSettingGet(
 export async function handleSettingSet(
   params: ParamsFor<typeof Method.SETTING_SET>,
 ): Promise<Record<string, unknown>> {
+  // The bridge's own settings gate its permission tiers (writeEnabled,
+  // destructiveEnabled, maxDeletePerCall) and relay URL. A write-tier agent
+  // must not be able to escalate itself or redirect the relay by writing them.
+  if (params.namespace === MODULE_ID) {
+    throw new BridgeError(
+      ErrorCode.FORBIDDEN,
+      `Settings under '${MODULE_ID}' control the bridge itself and cannot be changed via the API; edit them in Foundry's module settings.`,
+    );
+  }
   const settings = getSettings();
   const fullKey = `${params.namespace}.${params.key}`;
   assertRegistered(settings, fullKey);
