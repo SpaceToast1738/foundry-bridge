@@ -85,25 +85,35 @@ pack (backups/authoring), use `export_to_compendium` (the pack must be unlocked)
 `create_actor` / `grant_item` (compendium or inline) to build them; `toggle_condition` (+ `list_conditions`)
 for status effects; `get_roll_data` to feed `roll_dice`; `assign_actor` to give a player ownership;
 `apply_damage`/`apply_healing` for HP (system-dependent — falls back to `modify_document` if unsupported).
-On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed, respects resistances),
-`dnd5e_apply_healing` (+temp HP), `dnd5e_roll` (saves/checks/skills/death), `dnd5e_rest`,
-`dnd5e_actor_summary`, resource management (`dnd5e_spell_slots`, `dnd5e_currency`, `dnd5e_award_xp`,
-`dnd5e_hit_dice`, `dnd5e_death_saves`, `dnd5e_concentration`), and item play (`dnd5e_use_item` to use a
-weapon/spell/consumable; `dnd5e_item_roll` for a bare attack/damage). They error on non-5e worlds, so
-check `get_world`'s system first.
+On a **D&D 5e** world prefer the `dnd5e_*` tools — `dnd5e_apply_damage` (typed, respects resistances;
+hit several actors in one call with `targets`, e.g. a fireball; `check_concentration` auto-rolls the
+save), `dnd5e_apply_healing` (+temp HP), `dnd5e_roll` (saves/checks/skills/death — pass
+`advantage`/`disadvantage`, a flat `bonus`, and/or a `dc` for a `success` verdict; roll a whole party
+with `actors`), `dnd5e_rest`, `dnd5e_actor_summary`, resource management (`dnd5e_spell_slots`,
+`dnd5e_currency`, `dnd5e_award_xp`, `dnd5e_hit_dice`, `dnd5e_death_saves`, `dnd5e_concentration` —
+`save` rolls a concentration save at a DC). `dnd5e_rest`/`dnd5e_award_xp`/`dnd5e_currency` accept
+`actors` (or a `group` = a Group actor) to hit the whole party at once (XP splits by default). Item
+play: `dnd5e_use_item` (weapon/spell/consumable); `dnd5e_item_roll` (bare attack/damage). They error on
+non-5e worlds, so check `get_world`'s system first.
 
 ## Running the table
 - **Scenes/tokens:** `get_active_scene` for context; `activate_scene` to switch view; `place_token`
   (actor + x/y, defaults to the active scene) to drop a token; `update_token` to move/hide it.
-- **Dice/tables:** `roll_dice` evaluates a formula; `draw_table` pulls a random result. Neither posts
-  to chat — use `roll_to_chat` to roll *and* post a card, or announce with `post_chat_message`. Build
-  tables with `create_table` + `add_table_results` so `draw_table` has content.
-- **Audio:** `play_playlist`/`stop_playlist`/`play_sound` for music & ambiance.
+- **Dice/tables:** `roll_dice` evaluates a formula; `draw_table` pulls a random result (set
+  `display_chat` to post it, `whisper` gm/blind to keep it hidden). Otherwise use `roll_to_chat` to roll
+  *and* post a card, or announce with `post_chat_message`. Build tables with `create_table` +
+  `add_table_results` so `draw_table` has content.
+- **Audio:** `play_playlist`/`stop_playlist`/`play_sound` for music & ambiance; `play_next` (or
+  `direction:-1` for previous), `pause_playlist`/`resume_playlist` (omit `sound` to affect the whole
+  playlist), and `stop_sound` for one track.
 - **Read chat / duplicate:** `get_messages` reads recent chat for context; `duplicate_document` clones
   an actor/item/journal (great for reskinning).
+- **Pause:** `pause_game` (omit `paused` to toggle) freezes the table; `get_world`/`get_status` report
+  the current `paused` state.
 - **Combat:** `start_combat` → `add_combatants` (token ids; pass `roll_initiative:true` to roll on add) →
-  `advance_combat` (`next`/`next_round`/`end`); `set_initiative`/`remove_combatant` for fine control;
-  `damage_combatant`/`combatant_condition`/`update_combatant` (defeated/hidden) to run the fight.
+  `advance_combat` (`next`/`next_round`/`previous_round`/`end`); `set_initiative`/`remove_combatant` for
+  fine control; `damage_combatant` (one, or several via `combatants`)/`combatant_condition`/
+  `update_combatant` (defeated/hidden) to run the fight.
 - **Scene env / maps:** `create_scene` (placeable-ready — use it instead of `create_document` for scenes);
   `update_scene` (darkness/lighting/weather), `reset_fog`; `draw_walls` + `toggle_door`; `place_light`/
   `place_note`/`place_template` (AoE; tiles etc. via `create_embedded`); timed effects via

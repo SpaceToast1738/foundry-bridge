@@ -13,20 +13,26 @@ function installRoll(): void {
   };
 }
 
+let lastDraw: Record<string, unknown> | undefined;
+
 function makeTable(): FakeDoc {
   return {
     _id: "rt1",
     name: "Loot",
-    draw: async (_opts: Record<string, unknown>) => ({
-      roll: { total: 7 },
-      results: [{ text: "A rusty dagger", documentUuid: "Item.abc", img: "d.png" }],
-    }),
+    draw: async (opts: Record<string, unknown>) => {
+      lastDraw = opts;
+      return {
+        roll: { total: 7 },
+        results: [{ text: "A rusty dagger", documentUuid: "Item.abc", img: "d.png" }],
+      };
+    },
   };
 }
 
 describe("dice & table handlers", () => {
   let restore: () => void;
   beforeEach(() => {
+    lastDraw = undefined;
     restore = installFakeGame({ tables: [makeTable()] });
     installRoll();
   });
@@ -45,6 +51,14 @@ describe("dice & table handlers", () => {
     const res = await handleTableDraw({ ref: { name: "Loot" } });
     expect(res).toMatchObject({ table: "Loot", total: 7 });
     expect((res.results as unknown[])[0]).toMatchObject({ text: "A rusty dagger", documentUuid: "Item.abc" });
+    expect(lastDraw).toMatchObject({ displayChat: false });
+  });
+
+  it("posts to chat when display_chat is set, mapping whisper to a rollMode", async () => {
+    await handleTableDraw({ ref: { name: "Loot" }, display_chat: true, whisper: "gm" });
+    expect(lastDraw).toMatchObject({ displayChat: true, rollMode: "gmroll" });
+    await handleTableDraw({ ref: { name: "Loot" }, display_chat: true, whisper: "blind" });
+    expect(lastDraw).toMatchObject({ displayChat: true, rollMode: "blindroll" });
   });
 
   it("NOT_FOUND for an unknown table", async () => {

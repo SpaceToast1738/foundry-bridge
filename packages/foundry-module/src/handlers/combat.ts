@@ -176,12 +176,27 @@ export async function handleCombatantDamage(
   params: ParamsFor<typeof Method.COMBATANT_DAMAGE>,
 ): Promise<Record<string, unknown>> {
   const combat = resolveCombat(params.combat);
-  const combatant = findCombatant(combat, params.combatant);
-  if (!combatant.actor) {
-    throw new BridgeError(ErrorCode.UNAVAILABLE, "Combatant has no linked actor");
+  const amount = Math.abs(params.amount);
+
+  const damageOne = async (id: string): Promise<Record<string, unknown>> => {
+    const combatant = findCombatant(combat, id);
+    if (!combatant.actor) {
+      throw new BridgeError(ErrorCode.UNAVAILABLE, `Combatant ${id} has no linked actor`);
+    }
+    await damageActor(combatant.actor, amount, params.type);
+    return { combatant: id, damage: amount, type: params.type ?? "untyped" };
+  };
+
+  if (params.combatants && params.combatants.length) {
+    const results: Record<string, unknown>[] = [];
+    for (const id of params.combatants) results.push(await damageOne(id));
+    return { combat: combat.id, results };
   }
-  await damageActor(combatant.actor, Math.abs(params.amount), params.type);
-  return { combat: combat.id, combatant: params.combatant, damage: Math.abs(params.amount), type: params.type ?? "untyped" };
+  if (!params.combatant) {
+    throw new BridgeError(ErrorCode.BAD_REQUEST, "Provide `combatant` or `combatants`");
+  }
+  const single = await damageOne(params.combatant);
+  return { combat: combat.id, ...single };
 }
 
 export async function handleCombatantUpdate(

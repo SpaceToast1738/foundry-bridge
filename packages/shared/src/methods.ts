@@ -96,6 +96,11 @@ export const Method = {
   SETTINGS_LIST: "settings.list",
   SETTING_GET: "settings.get",
   SETTING_SET: "settings.set",
+  GAME_PAUSE: "game.pause",
+  PLAYLIST_NEXT: "playlist.next",
+  PLAYLIST_PAUSE: "playlist.pause",
+  PLAYLIST_RESUME: "playlist.resume",
+  PLAYLIST_STOP_SOUND: "playlist.stop_sound",
 } as const;
 
 export type Method = (typeof Method)[keyof typeof Method];
@@ -196,6 +201,11 @@ export const methodSchema = z.enum([
   Method.SETTINGS_LIST,
   Method.SETTING_GET,
   Method.SETTING_SET,
+  Method.GAME_PAUSE,
+  Method.PLAYLIST_NEXT,
+  Method.PLAYLIST_PAUSE,
+  Method.PLAYLIST_RESUME,
+  Method.PLAYLIST_STOP_SOUND,
 ]);
 
 export const PermissionTier = {
@@ -298,6 +308,11 @@ export const METHOD_TIERS: Record<Method, PermissionTier> = {
   [Method.SETTINGS_LIST]: PermissionTier.READ,
   [Method.SETTING_GET]: PermissionTier.READ,
   [Method.SETTING_SET]: PermissionTier.WRITE,
+  [Method.GAME_PAUSE]: PermissionTier.WRITE,
+  [Method.PLAYLIST_NEXT]: PermissionTier.WRITE,
+  [Method.PLAYLIST_PAUSE]: PermissionTier.WRITE,
+  [Method.PLAYLIST_RESUME]: PermissionTier.WRITE,
+  [Method.PLAYLIST_STOP_SOUND]: PermissionTier.WRITE,
   [Method.DOCUMENTS_DELETE]: PermissionTier.DESTRUCTIVE,
   [Method.MACRO_EXECUTE]: PermissionTier.DESTRUCTIVE,
   [Method.EMBEDDED_DELETE]: PermissionTier.DESTRUCTIVE,
@@ -459,6 +474,10 @@ export const paramSchemas = {
   [Method.TABLE_DRAW]: z.object({
     ref: docRefSchema,
     formula: z.string().min(1).optional(),
+    // Post the draw to chat (default false — returns the result silently).
+    display_chat: z.boolean().optional(),
+    // When posting to chat, restrict visibility: "gm" (GM-only) or "blind".
+    whisper: z.enum(["gm", "blind"]).optional(),
   }),
   [Method.COMBAT_CREATE]: z.object({ scene: docRefSchema.optional() }),
   [Method.COMBAT_ADD]: z.object({
@@ -527,26 +546,57 @@ export const paramSchemas = {
     actor: docRefSchema,
     amount: z.number(),
   }),
-  [Method.DND5E_APPLY_DAMAGE]: z.object({
-    actor: docRefSchema,
-    amount: z.number(),
-    type: z.string().min(1).optional(),
-    multiplier: z.number().optional(),
-  }),
+  [Method.DND5E_APPLY_DAMAGE]: z
+    .object({
+      actor: docRefSchema.optional(),
+      // Apply the same damage to several actors at once (e.g. a fireball).
+      // Provide `actor` OR `targets`.
+      targets: z.array(docRefSchema).min(1).optional(),
+      amount: z.number(),
+      type: z.string().min(1).optional(),
+      multiplier: z.number().optional(),
+      // Roll a concentration save (DC = max(10, floor(applied damage/2)), where
+      // applied damage = amount*multiplier) for any target currently
+      // concentrating; included in the per-target result. Skipped if no damage.
+      check_concentration: z.boolean().optional(),
+    })
+    .refine((p) => p.actor || (p.targets && p.targets.length), {
+      message: "Provide `actor` or `targets`",
+    }),
   [Method.DND5E_APPLY_HEALING]: z.object({
     actor: docRefSchema,
     amount: z.number(),
     temp: z.boolean().optional(),
   }),
-  [Method.DND5E_ROLL]: z.object({
-    actor: docRefSchema,
-    kind: z.enum(["save", "check", "skill", "death"]),
-    key: z.string().min(1).optional(),
-  }),
-  [Method.DND5E_REST]: z.object({
-    actor: docRefSchema,
-    type: z.enum(["short", "long"]),
-  }),
+  [Method.DND5E_ROLL]: z
+    .object({
+      actor: docRefSchema.optional(),
+      // Roll for several actors at once (e.g. a party-wide save); returns a
+      // per-actor result array. Provide `actor` OR `actors`.
+      actors: z.array(docRefSchema).min(1).optional(),
+      kind: z.enum(["save", "check", "skill", "death"]),
+      key: z.string().min(1).optional(),
+      advantage: z.boolean().optional(),
+      disadvantage: z.boolean().optional(),
+      // Flat modifier added to the roll, e.g. "+2", "-1d4", or 3.
+      bonus: z.union([z.string(), z.number()]).optional(),
+      // If set, the response includes `success` (total >= dc).
+      dc: z.number().optional(),
+    })
+    .refine((p) => p.actor || (p.actors && p.actors.length), {
+      message: "Provide `actor` or `actors`",
+    }),
+  [Method.DND5E_REST]: z
+    .object({
+      actor: docRefSchema.optional(),
+      actors: z.array(docRefSchema).min(1).optional(),
+      // A dnd5e Group actor whose members all rest.
+      group: docRefSchema.optional(),
+      type: z.enum(["short", "long"]),
+    })
+    .refine((p) => p.actor || p.group || (p.actors && p.actors.length), {
+      message: "Provide `actor`, `actors`, or `group`",
+    }),
   [Method.DND5E_ACTOR_SUMMARY]: z.object({ actor: docRefSchema }),
   [Method.TABLE_CREATE]: z.object({
     name: z.string().min(1),
@@ -695,23 +745,40 @@ export const paramSchemas = {
     action: z.enum(["use", "recover", "set"]),
     amount: z.number().int().nonnegative().optional(),
   }),
-  [Method.DND5E_CURRENCY]: z.object({
-    actor: docRefSchema,
-    mode: z.enum(["add", "set"]),
-    changes: z
-      .object({
-        pp: z.number().int().optional(),
-        gp: z.number().int().optional(),
-        ep: z.number().int().optional(),
-        sp: z.number().int().optional(),
-        cp: z.number().int().optional(),
-      })
-      .refine((c) => Object.keys(c).length > 0, { message: "Provide at least one coin type" }),
-  }),
-  [Method.DND5E_AWARD_XP]: z.object({
-    actor: docRefSchema,
-    amount: z.number().int(),
-  }),
+  [Method.DND5E_CURRENCY]: z
+    .object({
+      actor: docRefSchema.optional(),
+      actors: z.array(docRefSchema).min(1).optional(),
+      // A dnd5e Group actor whose members each receive the change.
+      group: docRefSchema.optional(),
+      mode: z.enum(["add", "set"]),
+      changes: z
+        .object({
+          pp: z.number().int().optional(),
+          gp: z.number().int().optional(),
+          ep: z.number().int().optional(),
+          sp: z.number().int().optional(),
+          cp: z.number().int().optional(),
+        })
+        .refine((c) => Object.keys(c).length > 0, { message: "Provide at least one coin type" }),
+    })
+    .refine((p) => p.actor || p.group || (p.actors && p.actors.length), {
+      message: "Provide `actor`, `actors`, or `group`",
+    }),
+  [Method.DND5E_AWARD_XP]: z
+    .object({
+      actor: docRefSchema.optional(),
+      actors: z.array(docRefSchema).min(1).optional(),
+      // A dnd5e Group actor whose members share the award.
+      group: docRefSchema.optional(),
+      amount: z.number().int(),
+      // For a party (actors[]/group): true = give `amount` to each member;
+      // false (default) = split `amount` evenly across members.
+      each: z.boolean().optional(),
+    })
+    .refine((p) => p.actor || p.group || (p.actors && p.actors.length), {
+      message: "Provide `actor`, `actors`, or `group`",
+    }),
   [Method.DND5E_HIT_DICE]: z.object({
     actor: docRefSchema,
     action: z.enum(["spend", "recover"]),
@@ -728,7 +795,9 @@ export const paramSchemas = {
     }),
   [Method.DND5E_CONCENTRATION]: z.object({
     actor: docRefSchema,
-    action: z.enum(["check", "break"]),
+    action: z.enum(["check", "break", "save"]),
+    // DC for action "save" (default 10).
+    dc: z.number().optional(),
   }),
   [Method.DND5E_USE_ITEM]: z.object({
     actor: docRefSchema,
@@ -766,12 +835,18 @@ export const paramSchemas = {
       )
       .min(1),
   }),
-  [Method.COMBATANT_DAMAGE]: z.object({
-    combat: docRefSchema.optional(),
-    combatant: z.string().min(1),
-    amount: z.number().int(),
-    type: z.string().min(1).optional(),
-  }),
+  [Method.COMBATANT_DAMAGE]: z
+    .object({
+      combat: docRefSchema.optional(),
+      combatant: z.string().min(1).optional(),
+      // Damage several combatants at once; returns a per-combatant result.
+      combatants: z.array(z.string().min(1)).min(1).optional(),
+      amount: z.number().int(),
+      type: z.string().min(1).optional(),
+    })
+    .refine((p) => p.combatant || (p.combatants && p.combatants.length), {
+      message: "Provide `combatant` or `combatants`",
+    }),
   [Method.COMBATANT_UPDATE]: z
     .object({
       combat: docRefSchema.optional(),
@@ -812,6 +887,29 @@ export const paramSchemas = {
     namespace: z.string().min(1),
     key: z.string().min(1),
     value: z.unknown(),
+  }),
+  [Method.GAME_PAUSE]: z
+    .object({
+      paused: z.boolean().optional(),
+    })
+    .optional(),
+  [Method.PLAYLIST_NEXT]: z.object({
+    playlist: docRefSchema,
+    // 1 = next (default), -1 = previous.
+    direction: z.number().int().optional(),
+  }),
+  [Method.PLAYLIST_PAUSE]: z.object({
+    playlist: docRefSchema,
+    // Which sound to pause; omit to pause the playlist's currently-playing sound(s).
+    sound: docRefSchema.optional(),
+  }),
+  [Method.PLAYLIST_RESUME]: z.object({
+    playlist: docRefSchema,
+    sound: docRefSchema.optional(),
+  }),
+  [Method.PLAYLIST_STOP_SOUND]: z.object({
+    playlist: docRefSchema,
+    sound: docRefSchema,
   }),
 } as const satisfies Record<Method, z.ZodTypeAny>;
 

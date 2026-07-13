@@ -3,6 +3,8 @@ export interface WorldGetResult {
   title?: string;
   system?: { id?: string; version?: string };
   foundryVersion?: string;
+  /** Whether the game is currently paused (the Foundry pause banner is showing). */
+  paused: boolean;
   counts: {
     users: number;
     actors: number;
@@ -26,6 +28,7 @@ export function handleWorldGet(): WorldGetResult {
       version: game.system?.version,
     },
     foundryVersion: game.version,
+    paused: game.paused ?? false,
     counts: {
       users: count(game.users),
       actors: count(game.actors),

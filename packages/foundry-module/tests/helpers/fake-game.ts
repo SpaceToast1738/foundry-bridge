@@ -52,6 +52,7 @@ export interface FakeGameOptions {
   world?: { id: string; title: string };
   system?: { id: string; version: string };
   version?: string;
+  paused?: boolean;
   actors?: FakeDoc[];
   items?: FakeDoc[];
   journal?: FakeDoc[];
@@ -188,6 +189,12 @@ export function installFakeGame(opts: FakeGameOptions = {}): () => void {
     world: opts.world,
     system: opts.system,
     version: opts.version,
+    paused: opts.paused ?? false,
+    togglePause(state?: boolean) {
+      const g = (globalThis as { game: { paused?: boolean } }).game;
+      g.paused = state ?? !g.paused;
+      return g.paused;
+    },
     actors: makeCollection(stores.Actor),
     items: makeCollection(stores.Item),
     journal: makeCollection(stores.JournalEntry),

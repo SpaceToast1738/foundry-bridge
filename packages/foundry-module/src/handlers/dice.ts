@@ -124,7 +124,15 @@ export async function handleTableDraw(
     );
   }
   const table = raw as TableDoc;
-  const options: Record<string, unknown> = { displayChat: false, replacement: true };
+  const options: Record<string, unknown> = {
+    displayChat: params.display_chat ?? false,
+    replacement: true,
+  };
+  // RollTable#draw takes a `rollMode`, not a whisper user-id list. Map the two
+  // supported visibilities to Foundry's DICE_ROLL_MODES string values.
+  if (params.whisper) {
+    options.rollMode = params.whisper === "blind" ? "blindroll" : "gmroll";
+  }
   if (params.formula) {
     options.roll = new (getRoll())(params.formula);
   }

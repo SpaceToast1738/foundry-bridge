@@ -63,6 +63,10 @@ declare global {
     readonly world?: { id: string; title: string };
     readonly system?: { id: string; version: string };
     readonly version?: string;
+    /** Global pause state (synchronous). */
+    readonly paused?: boolean;
+    /** Set (or, with no argument, toggle) the pause state; syncs all clients. */
+    togglePause(state?: boolean): boolean;
     readonly actors?: { contents: unknown[]; get(id: string): unknown };
     readonly items?: { contents: unknown[]; get(id: string): unknown };
     readonly journal?: { contents: unknown[]; get(id: string): unknown };

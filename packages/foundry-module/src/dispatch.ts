@@ -9,6 +9,7 @@ import { ZodError } from "zod";
 import { assertAllowed, type PermissionState } from "./permissions.js";
 import { handlePing } from "./handlers/ping.js";
 import { handleWorldGet } from "./handlers/world.js";
+import { handleGamePause } from "./handlers/game.js";
 import {
   handleDocumentsCreate,
   handleDocumentsDelete,
@@ -23,9 +24,13 @@ import { handleTableCreate, handleTableAddResults } from "./handlers/tables.js";
 import {
   handlePlaylistAddSounds,
   handlePlaylistCreate,
+  handlePlaylistNext,
+  handlePlaylistPause,
   handlePlaylistPlay,
   handlePlaylistPlaySound,
+  handlePlaylistResume,
   handlePlaylistStop,
+  handlePlaylistStopSound,
 } from "./handlers/audio.js";
 import {
   handleEmbeddedCreate,
@@ -132,6 +137,8 @@ export type Handler = (
 const handlers: Partial<Record<Method, Handler>> = {
   [Method.PING]: () => handlePing(),
   [Method.WORLD_GET]: () => handleWorldGet(),
+  [Method.GAME_PAUSE]: (params) =>
+    handleGamePause(params as Parameters<typeof handleGamePause>[0]),
   [Method.DOCUMENTS_LIST]: (params) =>
     handleDocumentsList(params as Parameters<typeof handleDocumentsList>[0]),
   [Method.DOCUMENTS_GET]: (params) =>
@@ -250,6 +257,14 @@ const handlers: Partial<Record<Method, Handler>> = {
     handlePlaylistStop(params as Parameters<typeof handlePlaylistStop>[0]),
   [Method.PLAYLIST_PLAY_SOUND]: (params) =>
     handlePlaylistPlaySound(params as Parameters<typeof handlePlaylistPlaySound>[0]),
+  [Method.PLAYLIST_NEXT]: (params) =>
+    handlePlaylistNext(params as Parameters<typeof handlePlaylistNext>[0]),
+  [Method.PLAYLIST_PAUSE]: (params) =>
+    handlePlaylistPause(params as Parameters<typeof handlePlaylistPause>[0]),
+  [Method.PLAYLIST_RESUME]: (params) =>
+    handlePlaylistResume(params as Parameters<typeof handlePlaylistResume>[0]),
+  [Method.PLAYLIST_STOP_SOUND]: (params) =>
+    handlePlaylistStopSound(params as Parameters<typeof handlePlaylistStopSound>[0]),
   [Method.MESSAGES_LIST]: (params) =>
     handleMessagesList(params as Parameters<typeof handleMessagesList>[0]),
   [Method.DICE_ROLL_TO_CHAT]: (params) =>

@@ -179,6 +179,263 @@ describe("dnd5e depth (round 7)", () => {
   });
 });
 
+interface RollLog {
+  saveCfg: Record<string, unknown>[];
+  skillCfg: Record<string, unknown>[];
+  concCfg: Record<string, unknown>[];
+  damage: unknown[][];
+  updates: Record<string, unknown>[];
+  rests: string[];
+}
+
+function newLog(): RollLog {
+  return { saveCfg: [], skillCfg: [], concCfg: [], damage: [], updates: [], rests: [] };
+}
+
+/** An actor that captures the config passed to each roll method so tests can
+ * assert modifiers threaded through, plus damage/rest/update bookkeeping. */
+function rollActor(
+  id: string,
+  log: RollLog,
+  opts: { total?: number; concentrating?: boolean; xp?: number; xpMax?: number; gp?: number } = {},
+): FakeDoc {
+  const total = opts.total ?? 15;
+  return {
+    _id: id,
+    id,
+    name: id,
+    system: {
+      attributes: { hp: { value: 10, max: 10, temp: 0 } },
+      abilities: { con: { value: 12, mod: 1 }, dex: { value: 14, mod: 2 } },
+      currency: { gp: opts.gp ?? 0 },
+      details: { xp: { value: opts.xp ?? 0, max: opts.xpMax ?? 300 } },
+    },
+    concentration: { effects: { size: opts.concentrating ? 1 : 0 } },
+    endConcentration: async () => undefined,
+    applyDamage: async (...args: unknown[]) => {
+      log.damage.push([id, ...args]);
+    },
+    update: async (d: Record<string, unknown>) => {
+      log.updates.push({ id, ...d });
+      return d;
+    },
+    rollSavingThrow: async (cfg: Record<string, unknown>) => {
+      log.saveCfg.push(cfg);
+      return { total };
+    },
+    rollSkill: async (cfg: Record<string, unknown>) => {
+      log.skillCfg.push(cfg);
+      return { total };
+    },
+    rollConcentration: async (cfg: Record<string, unknown>) => {
+      log.concCfg.push(cfg);
+      return { total };
+    },
+    longRest: async () => {
+      log.rests.push(`${id}:long`);
+    },
+    shortRest: async () => {
+      log.rests.push(`${id}:short`);
+    },
+  } as unknown as FakeDoc;
+}
+
+describe("dnd5e Batch 3 — live-session", () => {
+  let restore: () => void;
+  let log: RollLog;
+  beforeEach(() => {
+    log = newLog();
+  });
+  afterEach(() => restore());
+
+  function install(actors: FakeDoc[]): void {
+    restore = installFakeGame({ actors, system: { id: "dnd5e", version: "5.3.3" } });
+  }
+
+  it("threads advantage into the roll config", async () => {
+    install([rollActor("a1", log)]);
+    await handleDnd5eRoll({ actor: { _id: "a1" }, kind: "save", key: "dex", advantage: true });
+    expect(log.saveCfg[0]).toMatchObject({ ability: "dex", advantage: true });
+  });
+
+  it("threads disadvantage and a flat bonus as a roll part", async () => {
+    install([rollActor("a1", log)]);
+    await handleDnd5eRoll({ actor: { _id: "a1" }, kind: "save", key: "con", disadvantage: true, bonus: "+2" });
+    expect(log.saveCfg[0]).toMatchObject({ disadvantage: true, rolls: [{ parts: ["+2"] }] });
+  });
+
+  it("evaluates a dc into success", async () => {
+    install([rollActor("a1", log, { total: 17 })]);
+    const pass = await handleDnd5eRoll({ actor: { _id: "a1" }, kind: "save", key: "dex", dc: 15 });
+    expect(pass).toMatchObject({ dc: 15, success: true, total: 17 });
+    const fail = await handleDnd5eRoll({ actor: { _id: "a1" }, kind: "save", key: "dex", dc: 20 });
+    expect(fail).toMatchObject({ dc: 20, success: false });
+  });
+
+  it("rolls for a whole party via actors[]", async () => {
+    install([rollActor("a1", log, { total: 12 }), rollActor("a2", log, { total: 18 })]);
+    const res = (await handleDnd5eRoll({
+      actors: [{ _id: "a1" }, { _id: "a2" }],
+      kind: "save",
+      key: "dex",
+      dc: 15,
+    })) as { results: Record<string, unknown>[] };
+    expect(res.results).toHaveLength(2);
+    expect(res.results[0]).toMatchObject({ actor: "a1", success: false });
+    expect(res.results[1]).toMatchObject({ actor: "a2", success: true });
+  });
+
+  it("applies damage to multiple targets", async () => {
+    install([rollActor("a1", log), rollActor("a2", log)]);
+    const res = (await handleDnd5eApplyDamage({
+      targets: [{ _id: "a1" }, { _id: "a2" }],
+      amount: 8,
+      type: "fire",
+    })) as { results: Record<string, unknown>[] };
+    expect(res.results).toHaveLength(2);
+    expect(log.damage.map((d) => d[0])).toEqual(["a1", "a2"]);
+  });
+
+  it("rolls a concentration save on damage when concentrating", async () => {
+    install([rollActor("a1", log, { total: 12, concentrating: true })]);
+    const res = (await handleDnd5eApplyDamage({
+      actor: { _id: "a1" },
+      amount: 30,
+      check_concentration: true,
+    })) as { concentration: Record<string, unknown> };
+    expect(res.concentration).toMatchObject({ wasConcentrating: true, dc: 15, save: 12, success: false });
+    expect(log.concCfg[0]).toMatchObject({ target: 15 });
+  });
+
+  it("skips the concentration save when not concentrating", async () => {
+    install([rollActor("a1", log, { concentrating: false })]);
+    const res = (await handleDnd5eApplyDamage({
+      actor: { _id: "a1" },
+      amount: 30,
+      check_concentration: true,
+    })) as { concentration: Record<string, unknown> };
+    expect(res.concentration).toMatchObject({ wasConcentrating: false, dc: 15 });
+    expect(res.concentration.save).toBeUndefined();
+    expect(log.concCfg).toHaveLength(0);
+  });
+
+  it("rolls a concentration save via the save action at a given dc", async () => {
+    install([rollActor("a1", log, { total: 18, concentrating: true })]);
+    const res = await handleDnd5eConcentration({ actor: { _id: "a1" }, action: "save", dc: 14 });
+    expect(res).toMatchObject({ dc: 14, save: 18, success: true });
+    expect(log.concCfg[0]).toMatchObject({ target: 14 });
+  });
+
+  it("scales the concentration DC by the damage multiplier", async () => {
+    install([rollActor("a1", log, { total: 25, concentrating: true })]);
+    const res = (await handleDnd5eApplyDamage({
+      actor: { _id: "a1" },
+      amount: 20,
+      multiplier: 2,
+      check_concentration: true,
+    })) as { concentration: Record<string, unknown> };
+    // applied = 40 → dc = max(10, floor(40/2)) = 20.
+    expect(res.concentration).toMatchObject({ dc: 20 });
+    expect(log.concCfg[0]).toMatchObject({ target: 20 });
+  });
+
+  it("does not roll a concentration save when no damage is applied", async () => {
+    install([rollActor("a1", log, { concentrating: true })]);
+    const res = (await handleDnd5eApplyDamage({
+      actor: { _id: "a1" },
+      amount: 10,
+      multiplier: 0,
+      check_concentration: true,
+    })) as { concentration: Record<string, unknown> };
+    expect(res.concentration).toMatchObject({ wasConcentrating: true });
+    expect(res.concentration.dc).toBeUndefined();
+    expect(res.concentration.save).toBeUndefined();
+    expect(log.concCfg).toHaveLength(0);
+  });
+
+  it("splits XP removal symmetrically (trunc, not floor)", async () => {
+    install([
+      rollActor("a1", log, { xp: 100 }),
+      rollActor("a2", log, { xp: 100 }),
+      rollActor("a3", log, { xp: 100 }),
+    ]);
+    const res = (await handleDnd5eAwardXp({
+      actors: [{ _id: "a1" }, { _id: "a2" }, { _id: "a3" }],
+      amount: -100,
+    })) as { awarded: number };
+    // trunc(-100/3) = -33 per member (floor would over-remove at -34).
+    expect(res.awarded).toBe(-33);
+  });
+
+  it("rests a whole party via actors[]", async () => {
+    install([rollActor("a1", log), rollActor("a2", log)]);
+    const res = (await handleDnd5eRest({
+      actors: [{ _id: "a1" }, { _id: "a2" }],
+      type: "short",
+    })) as { results: Record<string, unknown>[] };
+    expect(res.results).toHaveLength(2);
+    expect(log.rests).toEqual(["a1:short", "a2:short"]);
+  });
+
+  it("splits xp across a party by default, full amount with each", async () => {
+    install([rollActor("a1", log, { xp: 100 }), rollActor("a2", log, { xp: 100 })]);
+    const split = (await handleDnd5eAwardXp({
+      actors: [{ _id: "a1" }, { _id: "a2" }],
+      amount: 100,
+    })) as { awarded: number; results: Record<string, unknown>[] };
+    expect(split.awarded).toBe(50);
+    expect(split.results[0]).toMatchObject({ xp: 150, awarded: 50 });
+    restore();
+
+    log = newLog();
+    install([rollActor("a1", log, { xp: 100 }), rollActor("a2", log, { xp: 100 })]);
+    const each = (await handleDnd5eAwardXp({
+      actors: [{ _id: "a1" }, { _id: "a2" }],
+      amount: 100,
+      each: true,
+    })) as { awarded: number };
+    expect(each.awarded).toBe(100);
+  });
+
+  it("applies currency to each party member", async () => {
+    install([rollActor("a1", log, { gp: 10 }), rollActor("a2", log, { gp: 0 })]);
+    const res = (await handleDnd5eCurrency({
+      actors: [{ _id: "a1" }, { _id: "a2" }],
+      mode: "add",
+      changes: { gp: 5 },
+    })) as { results: Record<string, unknown>[] };
+    expect(res.results).toHaveLength(2);
+    expect(res.results[0]).toMatchObject({ currency: { gp: 15 } });
+    expect(res.results[1]).toMatchObject({ currency: { gp: 5 } });
+  });
+
+  it("expands a Group actor to its members for a rest", async () => {
+    const a1 = rollActor("a1", log);
+    const a2 = rollActor("a2", log);
+    const group = {
+      _id: "g1",
+      id: "g1",
+      name: "Party",
+      type: "group",
+      system: { members: [{ actor: a1 }, { actor: a2 }] },
+      update: async () => undefined,
+    } as unknown as FakeDoc;
+    install([a1, a2, group]);
+    const res = (await handleDnd5eRest({ group: { _id: "g1" }, type: "long" })) as {
+      results: Record<string, unknown>[];
+    };
+    expect(res.results).toHaveLength(2);
+    expect(log.rests).toEqual(["a1:long", "a2:long"]);
+  });
+
+  it("back-compat: a single actor still returns a flat object", async () => {
+    install([rollActor("a1", log)]);
+    const res = await handleDnd5eRest({ actor: { _id: "a1" }, type: "long" });
+    expect(res).toMatchObject({ actor: "a1", rest: "long" });
+    expect(res).not.toHaveProperty("results");
+  });
+});
+
 describe("dnd5e item use / rolls", () => {
   let restore: () => void;
   let used: boolean;

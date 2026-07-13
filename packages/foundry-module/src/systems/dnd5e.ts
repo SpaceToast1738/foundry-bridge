@@ -23,7 +23,10 @@ function assertDnd5e(): void {
 interface Dnd5eActor {
   id?: string;
   name?: string;
+  type?: string;
   system?: Record<string, unknown>;
+  /** A dnd5e Group actor exposes its member actors here in 5.x. */
+  members?: Iterable<unknown>;
   applyDamage?: (...args: unknown[]) => Promise<unknown>;
   update(data: Record<string, unknown>): Promise<unknown>;
   shortRest?: (config?: Record<string, unknown>) => Promise<unknown>;
@@ -34,6 +37,7 @@ interface Dnd5eActor {
   rollAbilityTest?: (...args: unknown[]) => Promise<unknown>;
   rollSkill?: (...args: unknown[]) => Promise<unknown>;
   rollDeathSave?: (...args: unknown[]) => Promise<unknown>;
+  rollConcentration?: (...args: unknown[]) => Promise<unknown>;
   concentration?: { effects?: { size?: number; contents?: unknown[] } };
   endConcentration?: (...args: unknown[]) => Promise<unknown>;
   items?: { contents?: Dnd5eItem[]; get?: (id: string) => Dnd5eItem | undefined };
@@ -97,6 +101,109 @@ function resolveActor(ref: DocRef): Dnd5eActor {
   return raw as Dnd5eActor;
 }
 
+function resolveOne(ref: DocRef | undefined): Dnd5eActor {
+  if (!ref) {
+    throw new BridgeError(ErrorCode.BAD_REQUEST, "Provide `actor` (or `actors`/`group`/`targets`)");
+  }
+  return resolveActor(ref);
+}
+
+/** Expand a dnd5e Group actor to its member actors. Defensive about the member
+ * shape across dnd5e versions (a `.members` iterable, or `system.members` as
+ * an array of `{actor}` / actor / uuid-or-id string). */
+function expandGroupMembers(group: Dnd5eActor): Dnd5eActor[] {
+  const sys = group.system as { type?: string; isGroup?: boolean } | undefined;
+  const isGroup = group.type === "group" || sys?.type === "group" || sys?.isGroup === true;
+  let raw: unknown[] = [];
+  const membersProp = group.members;
+  if (membersProp && typeof (membersProp as Iterable<unknown>)[Symbol.iterator] === "function") {
+    raw = Array.from(membersProp as Iterable<unknown>);
+  } else {
+    const sysMembers = (group.system as { members?: unknown })?.members;
+    if (Array.isArray(sysMembers)) raw = sysMembers;
+  }
+  if (!isGroup && raw.length === 0) {
+    throw new BridgeError(
+      ErrorCode.BAD_REQUEST,
+      `Actor '${group.name ?? group.id}' is not a Group actor`,
+    );
+  }
+  const actors = getCollection("actors") as { get?: (id: string) => unknown } | undefined;
+  const members: Dnd5eActor[] = [];
+  for (const entry of raw) {
+    let a: unknown = entry;
+    if (a && typeof a === "object" && "actor" in (a as Record<string, unknown>)) {
+      a = (a as { actor?: unknown }).actor;
+    }
+    if (typeof a === "string") {
+      const id = a.includes(".") ? a.split(".").pop() ?? a : a;
+      a = actors?.get?.(id);
+    }
+    if (a && typeof a === "object" && ("update" in (a as object) || "system" in (a as object))) {
+      members.push(a as Dnd5eActor);
+    }
+  }
+  if (members.length === 0) {
+    throw new BridgeError(
+      ErrorCode.UNAVAILABLE,
+      `Group actor '${group.name ?? group.id}' has no resolvable members`,
+    );
+  }
+  return members;
+}
+
+interface ActorSelector {
+  actor?: DocRef;
+  actors?: DocRef[];
+  group?: DocRef;
+}
+
+/** Whether a selector targets multiple actors (→ array-shaped result). */
+function isMultiSelector(sel: ActorSelector): boolean {
+  return Boolean((sel.actors && sel.actors.length) || sel.group);
+}
+
+/** Resolve a selector to a de-duplicated list of actors (single ref, an
+ * `actors[]` array, and/or a `group` expanded to its members). */
+function resolveActorList(sel: ActorSelector): Dnd5eActor[] {
+  const out: Dnd5eActor[] = [];
+  const seen = new Set<string>();
+  const add = (a: Dnd5eActor): void => {
+    const id = a.id ?? "";
+    if (id && seen.has(id)) return;
+    if (id) seen.add(id);
+    out.push(a);
+  };
+  if (sel.actor) add(resolveActor(sel.actor));
+  for (const ref of sel.actors ?? []) add(resolveActor(ref));
+  if (sel.group) {
+    for (const m of expandGroupMembers(resolveActor(sel.group))) add(m);
+  }
+  if (out.length === 0) {
+    throw new BridgeError(ErrorCode.BAD_REQUEST, "Provide `actor`, `actors`, or `group`");
+  }
+  return out;
+}
+
+/** Roll a dnd5e concentration save at a given DC (5.x: rollConcentration takes
+ * (config, dialog, message) with a built-in target:10 overridden via config.target). */
+async function rollConcentrationSave(
+  actor: Dnd5eActor,
+  dc: number,
+): Promise<{ total: number | null; success: boolean | null }> {
+  if (typeof actor.rollConcentration !== "function") {
+    return { total: null, success: null };
+  }
+  let result: unknown;
+  try {
+    result = await actor.rollConcentration({ target: dc }, { configure: false }, { create: false });
+  } catch {
+    result = await actor.rollConcentration({ fastForward: true, chatMessage: false });
+  }
+  const total = rollTotal(result) ?? null;
+  return { total, success: typeof total === "number" ? total >= dc : null };
+}
+
 function hp(actor: Dnd5eActor): Record<string, unknown> | undefined {
   const attrs = actor.system?.attributes as { hp?: Record<string, unknown> } | undefined;
   return attrs?.hp;
@@ -123,9 +230,48 @@ export async function handleDnd5eApplyDamage(
   params: ParamsFor<typeof Method.DND5E_APPLY_DAMAGE>,
 ): Promise<Record<string, unknown>> {
   assertDnd5e();
-  const actor = resolveActor(params.actor);
-  await applyDamage(actor, Math.abs(params.amount), params.type ?? "", params.multiplier ?? 1);
-  return { actor: actor.id, damage: Math.abs(params.amount), type: params.type ?? "untyped", hp: hp(actor) };
+  const amount = Math.abs(params.amount);
+  const mult = params.multiplier ?? 1;
+
+  const applyOne = async (actor: Dnd5eActor): Promise<Record<string, unknown>> => {
+    // Concentration state must be read BEFORE damage (dropping to 0 HP ends it).
+    let wasConcentrating = false;
+    if (params.check_concentration) {
+      const effects = actor.concentration?.effects;
+      wasConcentrating = (effects?.size ?? effects?.contents?.length ?? 0) > 0;
+    }
+    await applyDamage(actor, amount, params.type ?? "", mult);
+    const out: Record<string, unknown> = {
+      actor: actor.id,
+      damage: amount,
+      type: params.type ?? "untyped",
+      hp: hp(actor),
+    };
+    if (params.check_concentration) {
+      // DC is half the damage actually applied (after the multiplier). Only a
+      // positive hit provokes a save — a healing/zero multiplier does not.
+      const applied = Math.round(amount * mult);
+      const conc: Record<string, unknown> = { wasConcentrating };
+      if (applied > 0) {
+        const dc = Math.max(10, Math.floor(applied / 2));
+        conc.dc = dc;
+        if (wasConcentrating) {
+          const save = await rollConcentrationSave(actor, dc);
+          conc.save = save.total;
+          conc.success = save.success;
+        }
+      }
+      out.concentration = conc;
+    }
+    return out;
+  };
+
+  if (params.targets && params.targets.length) {
+    const results: Record<string, unknown>[] = [];
+    for (const ref of params.targets) results.push(await applyOne(resolveActor(ref)));
+    return { results };
+  }
+  return applyOne(resolveOne(params.actor));
 }
 
 export async function handleDnd5eApplyHealing(
@@ -148,59 +294,85 @@ export async function handleDnd5eRoll(
   params: ParamsFor<typeof Method.DND5E_ROLL>,
 ): Promise<Record<string, unknown>> {
   assertDnd5e();
-  const actor = resolveActor(params.actor);
   const key = params.key;
-  let result: unknown;
 
-  const call = async (
-    v4: ((...args: unknown[]) => Promise<unknown>) | undefined,
-    v3: ((...args: unknown[]) => Promise<unknown>) | undefined,
-    cfg: Record<string, unknown>,
-    positional: string | undefined,
-  ): Promise<unknown> => {
-    if (typeof v4 === "function") {
-      try {
-        // dnd5e v4+ signature is (config, dialog, message). Skip the dialog so
-        // it can't hang waiting for a click in the headless browser, and don't
-        // post a chat card (the caller can use post_chat_message).
-        return await v4(cfg, { configure: false }, { create: false });
-      } catch {
-        /* fall through to the v3 signature */
+  // dnd5e 5.x roll config: advantage/disadvantage are booleans, the DC is
+  // `target`, and a flat bonus is a roll part (there is no top-level `bonus`).
+  const mods: Record<string, unknown> = {};
+  if (params.advantage) mods.advantage = true;
+  if (params.disadvantage) mods.disadvantage = true;
+  if (params.dc !== undefined) mods.target = params.dc;
+  if (params.bonus !== undefined && params.bonus !== "") {
+    mods.rolls = [{ parts: [String(params.bonus)] }];
+  }
+
+  const rollOne = async (actor: Dnd5eActor): Promise<Record<string, unknown>> => {
+    let result: unknown;
+
+    const call = async (
+      v4: ((...args: unknown[]) => Promise<unknown>) | undefined,
+      v3: ((...args: unknown[]) => Promise<unknown>) | undefined,
+      cfg: Record<string, unknown>,
+      positional: string | undefined,
+    ): Promise<unknown> => {
+      if (typeof v4 === "function") {
+        try {
+          // dnd5e v4+/5.x signature is (config, dialog, message). Skip the dialog
+          // so it can't hang in the headless browser, and don't post a chat card.
+          return await v4(cfg, { configure: false }, { create: false });
+        } catch {
+          /* fall through to the v3 signature */
+        }
       }
+      if (typeof v3 === "function") {
+        // dnd5e v3 signature is (id?, { fastForward, chatMessage, ...mods }).
+        // v3 is dead on a 5.x world, but forward the modifiers for back-compat.
+        const opts = { fastForward: true, chatMessage: false, ...mods };
+        return positional !== undefined ? v3(positional, opts) : v3(opts);
+      }
+      throw new BridgeError(ErrorCode.UNAVAILABLE, `dnd5e roll '${params.kind}' is not supported by this actor`);
+    };
+
+    switch (params.kind) {
+      case "save":
+        requireKey(key, "save");
+        result = await call(actor.rollSavingThrow?.bind(actor), actor.rollAbilitySave?.bind(actor), { ability: key, ...mods }, key);
+        break;
+      case "check":
+        requireKey(key, "check");
+        result = await call(actor.rollAbilityCheck?.bind(actor), actor.rollAbilityTest?.bind(actor), { ability: key, ...mods }, key);
+        break;
+      case "skill":
+        requireKey(key, "skill");
+        result = await call(actor.rollSkill?.bind(actor), actor.rollSkill?.bind(actor), { skill: key, ...mods }, key);
+        break;
+      case "death":
+        if (typeof actor.rollDeathSave !== "function") {
+          throw new BridgeError(ErrorCode.UNAVAILABLE, "rollDeathSave not supported");
+        }
+        try {
+          result = await actor.rollDeathSave({ ...mods }, { configure: false }, { create: false });
+        } catch {
+          result = await actor.rollDeathSave({ fastForward: true, chatMessage: false, ...mods });
+        }
+        break;
     }
-    if (typeof v3 === "function") {
-      // dnd5e v3 signature is (id?, { fastForward, chatMessage }).
-      const opts = { fastForward: true, chatMessage: false };
-      return positional !== undefined ? v3(positional, opts) : v3(opts);
+
+    const total = rollTotal(result) ?? null;
+    const out: Record<string, unknown> = { actor: actor.id, kind: params.kind, key: key ?? null, total };
+    if (params.dc !== undefined) {
+      out.dc = params.dc;
+      out.success = typeof total === "number" ? total >= params.dc : null;
     }
-    throw new BridgeError(ErrorCode.UNAVAILABLE, `dnd5e roll '${params.kind}' is not supported by this actor`);
+    return out;
   };
 
-  switch (params.kind) {
-    case "save":
-      requireKey(key, "save");
-      result = await call(actor.rollSavingThrow?.bind(actor), actor.rollAbilitySave?.bind(actor), { ability: key }, key);
-      break;
-    case "check":
-      requireKey(key, "check");
-      result = await call(actor.rollAbilityCheck?.bind(actor), actor.rollAbilityTest?.bind(actor), { ability: key }, key);
-      break;
-    case "skill":
-      requireKey(key, "skill");
-      result = await call(actor.rollSkill?.bind(actor), actor.rollSkill?.bind(actor), { skill: key }, key);
-      break;
-    case "death":
-      if (typeof actor.rollDeathSave !== "function") {
-        throw new BridgeError(ErrorCode.UNAVAILABLE, "rollDeathSave not supported");
-      }
-      try {
-        result = await actor.rollDeathSave({}, { configure: false }, { create: false });
-      } catch {
-        result = await actor.rollDeathSave({ fastForward: true, chatMessage: false });
-      }
-      break;
+  if (params.actors && params.actors.length) {
+    const results: Record<string, unknown>[] = [];
+    for (const ref of params.actors) results.push(await rollOne(resolveActor(ref)));
+    return { results };
   }
-  return { actor: actor.id, kind: params.kind, key: key ?? null, total: rollTotal(result) ?? null };
+  return rollOne(resolveOne(params.actor));
 }
 
 function requireKey(key: string | undefined, kind: string): asserts key is string {
@@ -213,17 +385,27 @@ export async function handleDnd5eRest(
   params: ParamsFor<typeof Method.DND5E_REST>,
 ): Promise<Record<string, unknown>> {
   assertDnd5e();
-  const actor = resolveActor(params.actor);
-  const fn = params.type === "long" ? actor.longRest : actor.shortRest;
-  if (typeof fn !== "function") {
-    throw new BridgeError(ErrorCode.UNAVAILABLE, `${params.type}Rest is not supported by this actor`);
+  const list = resolveActorList(params);
+
+  const restOne = async (actor: Dnd5eActor): Promise<Record<string, unknown>> => {
+    const fn = params.type === "long" ? actor.longRest : actor.shortRest;
+    if (typeof fn !== "function") {
+      throw new BridgeError(ErrorCode.UNAVAILABLE, `${params.type}Rest is not supported by this actor`);
+    }
+    try {
+      await fn.call(actor, { dialog: false, chat: false });
+    } catch {
+      await fn.call(actor, {});
+    }
+    return { actor: actor.id, rest: params.type, hp: hp(actor) };
+  };
+
+  if (isMultiSelector(params)) {
+    const results: Record<string, unknown>[] = [];
+    for (const a of list) results.push(await restOne(a));
+    return { results };
   }
-  try {
-    await fn.call(actor, { dialog: false, chat: false });
-  } catch {
-    await fn.call(actor, {});
-  }
-  return { actor: actor.id, rest: params.type, hp: hp(actor) };
+  return restOne(list[0]);
 }
 
 export function handleDnd5eActorSummary(
@@ -280,35 +462,61 @@ export async function handleDnd5eCurrency(
   params: ParamsFor<typeof Method.DND5E_CURRENCY>,
 ): Promise<Record<string, unknown>> {
   assertDnd5e();
-  const actor = resolveActor(params.actor);
-  const update: Record<string, unknown> = {};
-  const result: Record<string, number> = {};
-  for (const [coin, delta] of Object.entries(params.changes)) {
-    if (typeof delta !== "number") continue;
-    const current = Number(sysPath(actor, `currency.${coin}`) ?? 0);
-    const next = params.mode === "set" ? delta : current + delta;
-    update[`system.currency.${coin}`] = Math.max(0, next);
-    result[coin] = Math.max(0, next);
+  const list = resolveActorList(params);
+
+  const applyOne = async (actor: Dnd5eActor): Promise<Record<string, unknown>> => {
+    const update: Record<string, unknown> = {};
+    const result: Record<string, number> = {};
+    for (const [coin, delta] of Object.entries(params.changes)) {
+      if (typeof delta !== "number") continue;
+      const current = Number(sysPath(actor, `currency.${coin}`) ?? 0);
+      const next = params.mode === "set" ? delta : current + delta;
+      update[`system.currency.${coin}`] = Math.max(0, next);
+      result[coin] = Math.max(0, next);
+    }
+    await actor.update(update);
+    return { actor: actor.id, currency: result };
+  };
+
+  if (isMultiSelector(params)) {
+    const results: Record<string, unknown>[] = [];
+    for (const a of list) results.push(await applyOne(a));
+    return { results };
   }
-  await actor.update(update);
-  return { actor: actor.id, currency: result };
+  return applyOne(list[0]);
 }
 
 export async function handleDnd5eAwardXp(
   params: ParamsFor<typeof Method.DND5E_AWARD_XP>,
 ): Promise<Record<string, unknown>> {
   assertDnd5e();
-  const actor = resolveActor(params.actor);
-  const current = Number(sysPath(actor, "details.xp.value") ?? 0);
-  const threshold = sysPath(actor, "details.xp.max");
-  const next = Math.max(0, current + params.amount);
-  await actor.update({ "system.details.xp.value": next });
-  return {
-    actor: actor.id,
-    xp: next,
-    threshold: typeof threshold === "number" ? threshold : null,
-    levelUpAvailable: typeof threshold === "number" ? next >= threshold : null,
+  const list = resolveActorList(params);
+  const multi = isMultiSelector(params);
+  // For a party: `each` gives the full amount to each member; otherwise split
+  // it evenly. trunc (round toward zero) so removing XP is symmetric with
+  // awarding it (a small remainder is dropped either way). Single actor gets full.
+  const per = multi && !params.each ? Math.trunc(params.amount / list.length) : params.amount;
+
+  const awardOne = async (actor: Dnd5eActor): Promise<Record<string, unknown>> => {
+    const current = Number(sysPath(actor, "details.xp.value") ?? 0);
+    const threshold = sysPath(actor, "details.xp.max");
+    const next = Math.max(0, current + per);
+    await actor.update({ "system.details.xp.value": next });
+    return {
+      actor: actor.id,
+      xp: next,
+      awarded: per,
+      threshold: typeof threshold === "number" ? threshold : null,
+      levelUpAvailable: typeof threshold === "number" ? next >= threshold : null,
+    };
   };
+
+  if (multi) {
+    const results: Record<string, unknown>[] = [];
+    for (const a of list) results.push(await awardOne(a));
+    return { awarded: per, each: Boolean(params.each), results };
+  }
+  return awardOne(list[0]);
 }
 
 export async function handleDnd5eHitDice(
@@ -361,6 +569,17 @@ export async function handleDnd5eConcentration(
   const count = effects?.size ?? effects?.contents?.length ?? 0;
   if (params.action === "check") {
     return { actor: actor.id, concentrating: count > 0, count };
+  }
+  if (params.action === "save") {
+    const dc = params.dc ?? 10;
+    if (typeof actor.rollConcentration !== "function") {
+      throw new BridgeError(
+        ErrorCode.UNAVAILABLE,
+        "This dnd5e version doesn't expose actor.rollConcentration(); roll a CON save with dnd5e_roll kind:'save' key:'con'",
+      );
+    }
+    const save = await rollConcentrationSave(actor, dc);
+    return { actor: actor.id, concentrating: count > 0, dc, save: save.total, success: save.success };
   }
   // break
   if (typeof actor.endConcentration !== "function") {

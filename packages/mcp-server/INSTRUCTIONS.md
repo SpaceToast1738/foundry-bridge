@@ -145,23 +145,31 @@ These `dnd5e_*` tools are **system-aware** and only work when the world runs the
 (otherwise they return `BAD_REQUEST`). On a 5e world, prefer these over the generic `apply_damage`
 because they respect damage types and traits:
 
-- `dnd5e_apply_damage { actor, amount, type?, multiplier? }` — typed damage respecting
-  resistances/immunities/vulnerabilities (`type`: e.g. `fire`, `slashing`; `multiplier`: `0.5` half,
-  `2` double).
+- `dnd5e_apply_damage { actor|targets[], amount, type?, multiplier?, check_concentration? }` — typed
+  damage respecting resistances/immunities/vulnerabilities (`type`: e.g. `fire`, `slashing`;
+  `multiplier`: `0.5` half, `2` double). Pass `targets` to hit several actors at once (e.g. a fireball) →
+  per-target `results`. `check_concentration` auto-rolls a save (DC = `max(10, floor(applied damage/2))`)
+  for any concentrating target.
 - `dnd5e_apply_healing { actor, amount, temp? }` — heal, or grant temporary HP (`temp: true`).
-- `dnd5e_roll { actor, kind, key? }` — `save`/`check` (`key` = ability, e.g. `"dex"`), `skill`
-  (`key` = skill code, e.g. `"ath"`), or `death` (no key). Returns the total.
-- `dnd5e_rest { actor, type }` — `short` or `long` rest (restores HP/resources).
+- `dnd5e_roll { actor|actors[], kind, key?, advantage?, disadvantage?, bonus?, dc? }` — `save`/`check`
+  (`key` = ability, e.g. `"dex"`), `skill` (`key` = skill code, e.g. `"ath"`), or `death` (no key).
+  Returns the total; with `dc` also a `success` boolean. `bonus` is a flat modifier (e.g. `"+2"`). Pass
+  `actors` for a party-wide roll → per-actor `results`.
+- `dnd5e_rest { actor|actors[]|group, type }` — `short` or `long` rest. `actors`/`group` (a Group actor)
+  rest the whole party.
 - `dnd5e_actor_summary { actor }` — compact HP / AC / abilities / level-or-CR readout from the sheet.
 - `dnd5e_spell_slots { actor, level, action, amount? }` — `level` 1–9 or `"pact"`; `action`
   `use`/`recover`/`set` (clamped to max).
-- `dnd5e_currency { actor, mode, changes }` — `mode` `add`/`set`; `changes` any of pp/gp/ep/sp/cp.
-- `dnd5e_award_xp { actor, amount }` — add XP; reports new total, next-level threshold, and
-  `levelUpAvailable` (does not auto-level).
+- `dnd5e_currency { actor|actors[]|group, mode, changes }` — `mode` `add`/`set`; `changes` any of
+  pp/gp/ep/sp/cp. `actors`/`group` apply the change to each party member.
+- `dnd5e_award_xp { actor|actors[]|group, amount, each? }` — add XP; reports new total, next-level
+  threshold, and `levelUpAvailable` (does not auto-level). For a party the amount splits evenly unless
+  `each` is set.
 - `dnd5e_hit_dice { actor, action, amount? }` — spend/recover pooled hit dice.
 - `dnd5e_death_saves { actor, successes?, failures? }` — set the counters (to *roll* a death save use
   `dnd5e_roll kind:"death"`).
-- `dnd5e_concentration { actor, action }` — `check` or `break`.
+- `dnd5e_concentration { actor, action, dc? }` — `check`, `break`, or `save` (roll a concentration save
+  at `dc`, default 10).
 - `dnd5e_use_item { actor, item }` — use an owned item (weapon/spell/consumable/feature) by `_id`/`name`,
   running its full use flow (consumes uses/slots) headlessly. Prefer this on newer dnd5e (rolls live in
   item Activities).

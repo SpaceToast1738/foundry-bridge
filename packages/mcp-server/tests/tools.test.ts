@@ -74,6 +74,43 @@ describe("buildToolDefinitions", () => {
     expect(names).toContain("upload_image");
   });
 
+  it("exposes the Batch 3 live-session tools", () => {
+    const names = buildToolDefinitions().map((t) => t.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "pause_game",
+        "play_next",
+        "stop_sound",
+        "pause_playlist",
+        "resume_playlist",
+      ]),
+    );
+  });
+
+  it("advance_combat exposes the round actions in its enum", () => {
+    const tools = buildToolDefinitions() as {
+      name: string;
+      inputSchema: { properties?: { action?: { enum?: string[] } } };
+    }[];
+    const action = tools.find((t) => t.name === "advance_combat")?.inputSchema.properties?.action;
+    expect(action?.enum).toEqual(
+      expect.arrayContaining(["next_round", "previous_round"]),
+    );
+  });
+
+  it("dnd5e_roll advertises the modifier + multi-actor params", () => {
+    const tools = buildToolDefinitions() as {
+      name: string;
+      inputSchema: { properties?: Record<string, unknown>; required?: string[] };
+    }[];
+    const roll = tools.find((t) => t.name === "dnd5e_roll")?.inputSchema;
+    expect(Object.keys(roll?.properties ?? {})).toEqual(
+      expect.arrayContaining(["advantage", "disadvantage", "bonus", "dc", "actors"]),
+    );
+    // actor is no longer required (actors[] is an alternative).
+    expect(roll?.required).not.toContain("actor");
+  });
+
   it("annotates heavy single-gets with a larger result-size ceiling", () => {
     const tools = buildToolDefinitions() as { name: string; _meta?: Record<string, unknown> }[];
     const by = (n: string) => tools.find((t) => t.name === n);
@@ -200,6 +237,22 @@ describe("dispatchTool", () => {
     await expect(
       dispatchTool("get_compendium", {}, ctxWith(relay)),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("routes the Batch 3 tools to their methods", async () => {
+    const { relay, calls } = makeRelay();
+    await dispatchTool("pause_game", { paused: true }, ctxWith(relay));
+    await dispatchTool("play_next", { playlist: { _id: "p" } }, ctxWith(relay));
+    await dispatchTool("stop_sound", { playlist: { _id: "p" }, sound: { _id: "s" } }, ctxWith(relay));
+    await dispatchTool("pause_playlist", { playlist: { _id: "p" } }, ctxWith(relay));
+    await dispatchTool("resume_playlist", { playlist: { _id: "p" } }, ctxWith(relay));
+    expect(calls.map((c) => c.method)).toEqual([
+      Method.GAME_PAUSE,
+      Method.PLAYLIST_NEXT,
+      Method.PLAYLIST_STOP_SOUND,
+      Method.PLAYLIST_PAUSE,
+      Method.PLAYLIST_RESUME,
+    ]);
   });
 });
 

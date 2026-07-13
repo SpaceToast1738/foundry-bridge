@@ -1,4 +1,5 @@
 import { handleWorldGet } from "../src/handlers/world";
+import { handleGamePause } from "../src/handlers/game";
 import { installFakeGame } from "./helpers/fake-game";
 
 describe("handleWorldGet", () => {
@@ -38,5 +39,28 @@ describe("handleWorldGet", () => {
     const out = handleWorldGet();
     expect(out.title).toBeUndefined();
     expect(out.counts.actors).toBe(0);
+  });
+
+  it("reports the paused state (default false)", () => {
+    uninstall = installFakeGame({});
+    expect(handleWorldGet().paused).toBe(false);
+    uninstall();
+    uninstall = installFakeGame({ paused: true });
+    expect(handleWorldGet().paused).toBe(true);
+  });
+});
+
+describe("handleGamePause", () => {
+  let uninstall: () => void;
+  afterEach(() => uninstall?.());
+
+  it("sets, clears, and toggles the pause state", () => {
+    uninstall = installFakeGame({ paused: false });
+    expect(handleGamePause({ paused: true })).toEqual({ paused: true });
+    expect(handleWorldGet().paused).toBe(true);
+    expect(handleGamePause({ paused: false })).toEqual({ paused: false });
+    // No argument toggles.
+    expect(handleGamePause(undefined)).toEqual({ paused: true });
+    expect(handleGamePause({})).toEqual({ paused: false });
   });
 });

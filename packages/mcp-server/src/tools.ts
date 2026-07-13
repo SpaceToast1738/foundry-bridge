@@ -545,18 +545,31 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "advance_combat",
     description:
-      "Advance a combat: action \"start\" (begin), \"next\" (next turn), \"previous\" (prior turn), or \"end\" (end the encounter — removes the combat). Defaults to the active combat.",
+      "Advance a combat: action \"start\" (begin), \"next\" (next turn), \"previous\" (prior turn), \"next_round\" / \"previous_round\" (jump a whole round), or \"end\" (end the encounter — removes the combat). Defaults to the active combat.",
     inputSchema: {
       type: "object",
       properties: {
         combat: docRefSchema,
         action: {
           type: "string",
-          enum: ["start", "next", "previous", "end"],
+          enum: ["start", "next", "previous", "next_round", "previous_round", "end"],
           description: "What to do.",
         },
       },
       required: ["action"],
+    },
+  });
+
+  tools.push({
+    name: "pause_game",
+    description:
+      "Pause or unpause the game (shows/hides Foundry's pause banner for all players). Set `paused` true to pause, false to resume; omit to toggle. Returns the new paused state.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        paused: { type: "boolean", description: "true = pause, false = resume, omit = toggle." },
+      },
+      required: [],
     },
   });
 
@@ -581,12 +594,14 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "draw_table",
     description:
-      "Draw a result from a RollTable (by _id or name). Returns the drawn result(s) without posting to chat or marking them drawn. Use for random encounters/loot/names.",
+      "Draw a result from a RollTable (by _id or name). Returns the drawn result(s) without marking them drawn. By default it does NOT post to chat; set `display_chat` to announce the draw, and `whisper` to keep it GM-only or blind. Use for random encounters/loot/names.",
     inputSchema: {
       type: "object",
       properties: {
         table: docRefSchema,
         formula: { type: "string", description: "Optional roll formula override." },
+        display_chat: { type: "boolean", description: "Post the draw to chat (default false)." },
+        whisper: { type: "string", enum: ["gm", "blind"], description: "When posting to chat, restrict visibility." },
       },
       required: ["table"],
     },
@@ -908,6 +923,49 @@ export function buildToolDefinitions(): ToolDef[] {
     },
   });
 
+  tools.push({
+    name: "play_next",
+    description: "Advance a playlist to its next track (or previous, with direction -1). Reference the playlist by _id or name.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        playlist: docRefSchema,
+        direction: { type: "integer", enum: [1, -1], description: "1 = next (default), -1 = previous." },
+      },
+      required: ["playlist"],
+    },
+  });
+
+  tools.push({
+    name: "stop_sound",
+    description: "Stop a single sound within a playlist (leaves the rest playing). Reference both by _id or name.",
+    inputSchema: {
+      type: "object",
+      properties: { playlist: docRefSchema, sound: docRefSchema },
+      required: ["playlist", "sound"],
+    },
+  });
+
+  tools.push({
+    name: "pause_playlist",
+    description: "Pause a sound in a playlist (resumes from the same spot later). Omit `sound` to pause everything currently playing in the playlist.",
+    inputSchema: {
+      type: "object",
+      properties: { playlist: docRefSchema, sound: docRefSchema },
+      required: ["playlist"],
+    },
+  });
+
+  tools.push({
+    name: "resume_playlist",
+    description: "Resume a paused sound in a playlist. Omit `sound` to resume everything paused in the playlist.",
+    inputSchema: {
+      type: "object",
+      properties: { playlist: docRefSchema, sound: docRefSchema },
+      required: ["playlist"],
+    },
+  });
+
   const playlistSoundSchema = {
     type: "object",
     properties: {
@@ -994,16 +1052,18 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "dnd5e_apply_damage",
     description:
-      "[D&D 5e] Apply typed damage to an actor, respecting resistances/immunities/vulnerabilities. `type` is a 5e damage type (e.g. fire, slashing); `multiplier` scales it. Only works on a dnd5e world.",
+      "[D&D 5e] Apply typed damage to an actor (or several at once via `targets`, e.g. a fireball), respecting resistances/immunities/vulnerabilities. `type` is a 5e damage type (e.g. fire, slashing); `multiplier` scales it. Set `check_concentration` to auto-roll a concentration save (DC = max(10, floor(applied damage/2))) for any target concentrating. Only works on a dnd5e world.",
     inputSchema: {
       type: "object",
       properties: {
         actor: docRefSchema,
+        targets: { type: "array", items: docRefSchema, description: "Apply to several actors at once. Provide `actor` OR `targets`." },
         amount: { type: "number", description: "Damage amount (positive)." },
         type: { type: "string", description: "5e damage type, e.g. \"fire\", \"slashing\". Omit for untyped." },
         multiplier: { type: "number", description: "Scale (e.g. 0.5 for half, 2 for double). Default 1." },
+        check_concentration: { type: "boolean", description: "Roll a concentration save for any target currently concentrating." },
       },
-      required: ["actor", "amount"],
+      required: ["amount"],
     },
   });
 
@@ -1025,29 +1085,36 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "dnd5e_roll",
     description:
-      "[D&D 5e] Roll for an actor: kind \"save\"/\"check\" (key = ability, e.g. \"dex\"), \"skill\" (key = skill, e.g. \"ath\"), or \"death\" (no key). Returns the total. Only works on a dnd5e world.",
+      "[D&D 5e] Roll for an actor: kind \"save\"/\"check\" (key = ability, e.g. \"dex\"), \"skill\" (key = skill, e.g. \"ath\"), or \"death\" (no key). Returns the total. Pass `advantage`/`disadvantage`, a flat `bonus` (e.g. \"+2\"), and/or a `dc` (adds `success` to the result). Use `actors` to roll for a whole party at once (returns a per-actor `results` array). Only works on a dnd5e world.",
     inputSchema: {
       type: "object",
       properties: {
         actor: docRefSchema,
+        actors: { type: "array", items: docRefSchema, description: "Roll for several actors (e.g. a party-wide save). Provide `actor` OR `actors`." },
         kind: { type: "string", enum: ["save", "check", "skill", "death"] },
         key: { type: "string", description: "Ability (str/dex/…) or skill code (ath/acr/…). Not needed for death saves." },
+        advantage: { type: "boolean", description: "Roll with advantage." },
+        disadvantage: { type: "boolean", description: "Roll with disadvantage." },
+        bonus: { description: "Flat modifier added to the roll, e.g. \"+2\", \"-1d4\", or 3.", anyOf: [{ type: "string" }, { type: "number" }] },
+        dc: { type: "number", description: "If set, the result includes `success` (total >= dc)." },
       },
-      required: ["actor", "kind"],
+      required: ["kind"],
     },
   });
 
   tools.push({
     name: "dnd5e_rest",
     description:
-      "[D&D 5e] Take a short or long rest for an actor (restores HP/resources). Only works on a dnd5e world.",
+      "[D&D 5e] Take a short or long rest for an actor, several actors (`actors`), or a whole party (`group` = a Group actor). Restores HP/resources. Only works on a dnd5e world.",
     inputSchema: {
       type: "object",
       properties: {
         actor: docRefSchema,
+        actors: { type: "array", items: docRefSchema, description: "Rest several actors at once." },
+        group: { ...docRefSchema, description: "A dnd5e Group actor whose members all rest." },
         type: { type: "string", enum: ["short", "long"] },
       },
-      required: ["actor", "type"],
+      required: ["type"],
     },
   });
 
@@ -1081,11 +1148,13 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "dnd5e_currency",
     description:
-      "[D&D 5e] Adjust an actor's coins. `mode` add (delta, may be negative) or set (absolute); `changes` is any of pp/gp/ep/sp/cp. Returns the new currency.",
+      "[D&D 5e] Adjust coins for an actor, several actors (`actors`), or a party (`group` = a Group actor — each member receives the change). `mode` add (delta, may be negative) or set (absolute); `changes` is any of pp/gp/ep/sp/cp. Returns the new currency.",
     inputSchema: {
       type: "object",
       properties: {
         actor: docRefSchema,
+        actors: { type: "array", items: docRefSchema, description: "Apply to several actors at once." },
+        group: { ...docRefSchema, description: "A dnd5e Group actor whose members each receive the change." },
         mode: { type: "string", enum: ["add", "set"] },
         changes: {
           type: "object",
@@ -1094,20 +1163,28 @@ export function buildToolDefinitions(): ToolDef[] {
             sp: { type: "integer" }, cp: { type: "integer" },
           },
           additionalProperties: false,
+          minProperties: 1,
+          description: "At least one of pp/gp/ep/sp/cp.",
         },
       },
-      required: ["actor", "mode", "changes"],
+      required: ["mode", "changes"],
     },
   });
 
   tools.push({
     name: "dnd5e_award_xp",
     description:
-      "[D&D 5e] Add (or remove, if negative) XP for an actor. Returns new xp, the next-level threshold, and whether a level-up is available (does not auto-level).",
+      "[D&D 5e] Add (or remove, if negative) XP for an actor, several actors (`actors`), or a party (`group` = a Group actor). For a party the `amount` is split evenly by default; set `each` to give the full amount to every member. Returns new xp, the next-level threshold, and whether a level-up is available (does not auto-level).",
     inputSchema: {
       type: "object",
-      properties: { actor: docRefSchema, amount: { type: "integer" } },
-      required: ["actor", "amount"],
+      properties: {
+        actor: docRefSchema,
+        actors: { type: "array", items: docRefSchema, description: "Award several actors at once." },
+        group: { ...docRefSchema, description: "A dnd5e Group actor whose members share the award." },
+        amount: { type: "integer" },
+        each: { type: "boolean", description: "Give the full amount to each member instead of splitting it." },
+      },
+      required: ["amount"],
     },
   });
 
@@ -1144,10 +1221,14 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "dnd5e_concentration",
     description:
-      "[D&D 5e] `check` whether an actor is concentrating, or `break` their concentration (ends the concentration effect).",
+      "[D&D 5e] `check` whether an actor is concentrating, `break` their concentration (ends the effect), or `save` to roll a concentration save at `dc` (default 10) — returns the total and whether it succeeded.",
     inputSchema: {
       type: "object",
-      properties: { actor: docRefSchema, action: { type: "string", enum: ["check", "break"] } },
+      properties: {
+        actor: docRefSchema,
+        action: { type: "string", enum: ["check", "break", "save"] },
+        dc: { type: "number", description: "DC for action \"save\" (default 10)." },
+      },
       required: ["actor", "action"],
     },
   });
@@ -1263,16 +1344,17 @@ export function buildToolDefinitions(): ToolDef[] {
   tools.push({
     name: "damage_combatant",
     description:
-      "Apply damage to a combatant's actor by combatant `_id` (defaults to the active combat). On a dnd5e world this respects damage `type`/resistances; elsewhere it's a flat HP hit.",
+      "Apply damage to a combatant's actor by combatant `_id` — or several at once via `combatants` (defaults to the active combat). On a dnd5e world this respects damage `type`/resistances; elsewhere it's a flat HP hit.",
     inputSchema: {
       type: "object",
       properties: {
         combat: docRefSchema,
-        combatant: { type: "string", description: "Combatant _id." },
+        combatant: { type: "string", description: "Combatant _id. Provide this OR `combatants`." },
+        combatants: { type: "array", items: { type: "string" }, description: "Combatant _ids to damage at once." },
         amount: { type: "integer", description: "Damage amount (positive)." },
         type: { type: "string", description: "Damage type (5e), e.g. \"fire\"." },
       },
-      required: ["combatant", "amount"],
+      required: ["amount"],
     },
   });
 
@@ -1745,6 +1827,14 @@ export async function dispatchTool(
       return ctx.relay.call(Method.PLAYLIST_STOP, params);
     case "play_sound":
       return ctx.relay.call(Method.PLAYLIST_PLAY_SOUND, params);
+    case "play_next":
+      return ctx.relay.call(Method.PLAYLIST_NEXT, params);
+    case "stop_sound":
+      return ctx.relay.call(Method.PLAYLIST_STOP_SOUND, params);
+    case "pause_playlist":
+      return ctx.relay.call(Method.PLAYLIST_PAUSE, params);
+    case "resume_playlist":
+      return ctx.relay.call(Method.PLAYLIST_RESUME, params);
     case "create_playlist":
       return ctx.relay.call(Method.PLAYLIST_CREATE, params);
     case "add_playlist_sounds":
@@ -1839,6 +1929,8 @@ export async function dispatchTool(
       return ctx.relay.call(Method.COMBAT_ROLL_INITIATIVE, params);
     case "advance_combat":
       return ctx.relay.call(Method.COMBAT_ADVANCE, params);
+    case "pause_game":
+      return ctx.relay.call(Method.GAME_PAUSE, params);
     case "roll_dice":
       return ctx.relay.call(Method.DICE_ROLL, params);
     case "draw_table": {
