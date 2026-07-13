@@ -3,15 +3,17 @@
 Target shape — everything co-located on the same box as Foundry:
 
 ```
-external MCP client → Caddy (TLS + bearer) → supergateway → mcp-server
-                                                                ↑
-                                                         ws://127.0.0.1:31414
-                                                                ↑
-                                                        headless Chromium
-                                                          + foundry-bridge
-                                                                ↑
-                                                            Foundry world
+external MCP client → Caddy (TLS + bearer) → mcp-server (Streamable HTTP, :31415)
+                                                   ↑
+                                            ws://127.0.0.1:31414  (loopback relay)
+                                                   ↑
+                                            headless Chromium + foundry-bridge module
+                                                   ↑
+                                               Foundry world
 ```
+
+(The mcp-server serves Streamable HTTP directly — the old supergateway hop was
+removed. Caddy reverse-proxies straight into `FOUNDRY_BRIDGE_GATEWAY_PORT`.)
 
 ## 0. Prerequisites on the VPS
 
@@ -159,6 +161,25 @@ journalctl -u foundry-bridge-browser -n 50
 
 In the browser journal you should see `[launcher][info] joined world` followed by `[launcher][module] [foundry-bridge] connected to ws://127.0.0.1:31414`.
 
+### Scheduled backups (optional but recommended)
+
+The world already survived one corruption incident — enable the daily backup
+timer. It runs `deploy/backup-world.sh scheduled` under `ProtectSystem=strict`
+(writes only under `/var/lib/foundry-bridge/backups`; keeps the newest
+`FOUNDRY_BACKUP_KEEP` archives). Env knobs live in `/etc/foundry-bridge/env`
+(see `deploy/env.example` → `FOUNDRY_BACKUP_*`).
+
+```bash
+cp deploy/systemd/foundry-bridge-backup.service /etc/systemd/system/
+cp deploy/systemd/foundry-bridge-backup.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now foundry-bridge-backup.timer
+
+systemctl list-timers foundry-bridge-backup.timer   # confirm next run
+systemctl start foundry-bridge-backup.service        # run one now to smoke-test
+ls -lh /var/lib/foundry-bridge/backups               # archive should appear
+```
+
 ## 6. Caddy
 
 ```bash
@@ -205,7 +226,7 @@ curl -s -X POST https://foundry-mcp.spencer-net.com/ \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/list"}'
 ```
 
-You should see the tool list (~88 tools) come back as JSON-RPC. If you get `Unauthorized` the bearer is wrong; if you get `502/503` check Caddy → supergateway → MCP server → relay → browser in order via `journalctl -u`.
+You should see the tool list (~119 tools) come back as JSON-RPC. If you get `Unauthorized` the bearer is wrong; if you get `502/503` check Caddy → mcp-server (gateway) → relay → browser in order via `journalctl -u` (and `curl http://127.0.0.1:31415/healthz` on the box to isolate whether the gateway itself is up).
 
 For an end-to-end check that matches the headline goal from the handoff, point an MCP client at the URL+token and:
 

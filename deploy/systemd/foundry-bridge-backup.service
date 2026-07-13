@@ -1,0 +1,21 @@
+[Unit]
+Description=foundry-bridge world backup (oneshot)
+Documentation=https://github.com/SpaceToast1738/foundry-bridge
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/foundry-bridge/env
+# Tars the live Foundry data tree to FOUNDRY_BACKUP_DIR and prunes to
+# FOUNDRY_BACKUP_KEEP. Runs as root so it can read /opt/foundry/data regardless
+# of container-side ownership; the filesystem is otherwise read-only.
+ExecStart=/usr/bin/env bash /opt/foundry-bridge/deploy/backup-world.sh scheduled
+
+# Hardening: read-only fs except the backup output area.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/foundry-bridge
+StandardOutput=journal
+StandardError=journal

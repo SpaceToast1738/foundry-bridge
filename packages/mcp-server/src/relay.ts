@@ -17,6 +17,8 @@ export interface RelayOptions {
   requestTimeoutMs?: number;
   /** Directory for the durable JSONL audit log; undefined disables it. */
   auditDir?: string;
+  /** ws ping cadence to detect a half-open module socket (default 30s). */
+  pingIntervalMs?: number;
   logger?: {
     log: (msg: string) => void;
     warn: (msg: string) => void;
@@ -25,6 +27,7 @@ export interface RelayOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_PING_INTERVAL_MS = 30_000;
 
 const noopLogger = {
   log: () => undefined,
@@ -98,6 +101,7 @@ export class Relay {
   private readonly host: string;
   private readonly port: number;
   private readonly requestTimeoutMs: number;
+  private readonly pingIntervalMs: number;
   private readonly logger: NonNullable<RelayOptions["logger"]>;
   // Observability (A2/A3): cheap in-memory counters + a recent-activity ring.
   private connectedSince: number | null = null;
@@ -112,6 +116,7 @@ export class Relay {
     this.host = opts.host ?? "127.0.0.1";
     this.port = opts.port;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.pingIntervalMs = opts.pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS;
     this.logger = opts.logger ?? noopLogger;
     if (opts.auditDir) {
       try {
@@ -287,8 +292,40 @@ export class Relay {
     this.socket = ws;
     this.connectedSince = Date.now();
     this.logger.log(`[relay] module connected`);
+
+    // Keepalive: a half-open socket (renderer hang, TCP blackhole) still reads
+    // as OPEN, so calls would sit the full requestTimeoutMs before failing.
+    // Ping periodically; if the previous ping went unanswered, the socket is
+    // dead — terminate it so calls fail fast and reconnect kicks in.
+    let awaitingPong = false;
+    ws.on("pong", () => {
+      awaitingPong = false;
+    });
+    const pingTimer = setInterval(() => {
+      if (ws.readyState !== ws.OPEN) return;
+      if (awaitingPong) {
+        this.logger.warn(
+          `[relay] module socket unresponsive (missed pong) — terminating`,
+        );
+        try {
+          ws.terminate();
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      awaitingPong = true;
+      try {
+        ws.ping();
+      } catch {
+        /* ignore */
+      }
+    }, this.pingIntervalMs);
+    pingTimer.unref?.();
+
     ws.on("message", (raw: RawData) => this.handleMessage(raw.toString()));
     ws.on("close", () => {
+      clearInterval(pingTimer);
       this.logger.warn(`[relay] module disconnected`);
       if (this.socket === ws) {
         this.socket = null;

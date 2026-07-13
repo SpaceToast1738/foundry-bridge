@@ -27,3 +27,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # Informational supply-chain scan. Non-blocking: existing advisories are
+      # transitive (in code paths we don't invoke) and are handled by upstream
+      # bumps via dependabot; this surfaces NEW high/critical issues in the log.
+      - name: Audit (informational)
+        run: npm audit --audit-level=high || true

@@ -32,6 +32,10 @@ const RELOAD_INTERVAL_MS = Number(
 const STATUS_PATH =
   process.env.FOUNDRY_BRIDGE_LAUNCHER_STATUS ??
   "/var/lib/foundry-bridge/launcher-status.json";
+// Optional alerting: on every launcher state change we POST a small JSON body
+// here. Point it at a Home Assistant webhook (https://<ha>/api/webhook/<id>)
+// to get a mobile push when the bridge goes down or recovers. Unset = disabled.
+const STATE_WEBHOOK = process.env.FOUNDRY_BRIDGE_STATE_WEBHOOK;
 
 function log(level, msg) {
   console.error(`[launcher][${level}] ${msg}`);
@@ -46,13 +50,42 @@ const status = {
   availableUsers: null,
 };
 
+/** Fire the state-change webhook (best-effort, timeout-guarded). */
+function notifyStateChange(oldState, newState) {
+  if (!STATE_WEBHOOK) return;
+  const body = JSON.stringify({
+    event: "foundry-bridge-state",
+    old_state: oldState,
+    new_state: newState,
+    world: status.currentWorld,
+    username: status.username,
+    lastError: status.lastError,
+    ts: status.ts,
+  });
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 5000);
+  fetch(STATE_WEBHOOK, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body,
+    signal: ctrl.signal,
+  })
+    .catch((err) => log("warn", `state webhook failed: ${err.message}`))
+    .finally(() => clearTimeout(t));
+}
+
 /** Merge a partial update into the launcher status and persist it (best-effort). */
 function writeStatus(partial) {
+  const prevState = status.state;
   Object.assign(status, partial, { ts: Date.now() });
   try {
     writeFileSync(STATUS_PATH, JSON.stringify(status, null, 2));
   } catch (err) {
     log("warn", `could not write status file ${STATUS_PATH}: ${err.message}`);
+  }
+  if (status.state !== prevState) {
+    log("info", `state ${prevState} → ${status.state}`);
+    notifyStateChange(prevState, status.state);
   }
 }
 

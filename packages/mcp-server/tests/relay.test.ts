@@ -59,6 +59,23 @@ describe("Relay", () => {
     module.close();
   });
 
+  it("keeps a responsive module connected under frequent pings", async () => {
+    // A real ws client auto-responds to ping frames, so a healthy module must
+    // stay connected across several ping cycles (regression guard for the
+    // keepalive not tearing down a live socket).
+    relay = new Relay({ port: 0, pingIntervalMs: 20 });
+    await relay.start();
+    const module = await connectModule(relay.getPort());
+    module.on("message", (raw) => {
+      const req = decodeRequest(raw.toString());
+      module.send(JSON.stringify({ id: req.id, ok: true, result: {} }));
+    });
+    await new Promise((r) => setTimeout(r, 120)); // ~6 ping cycles
+    expect(relay.isConnected()).toBe(true);
+    await expect(relay.call(Method.PING, {})).resolves.toEqual({});
+    module.close();
+  });
+
   it("appends a JSONL audit line per settled call, with doc ids", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fb-audit-"));
     relay = new Relay({ port: 0, auditDir: dir });

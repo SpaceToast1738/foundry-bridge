@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily foundry-bridge world backup
+Documentation=https://github.com/SpaceToast1738/foundry-bridge
+
+[Timer]
+# Daily at 04:30 with up to 10 min of jitter; Persistent catches a missed run
+# after the box was off.
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target
