@@ -14,12 +14,12 @@
   "dependencies": {
     "@foundry-bridge/shared": "0.1.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "express": "^4.21.2",
+    "express": "^5.2.1",
     "ws": "^8.18.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/express": "^4.17.23",
+    "@types/express": "^5.0.6",
     "@types/ws": "^8.18.1"
   }
 }
