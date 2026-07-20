@@ -15,7 +15,7 @@
     "@foundry-bridge/shared": "0.1.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "express": "^4.21.2",
-    "ws": "^8.18.3",
+    "ws": "^8.21.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
